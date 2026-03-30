@@ -153,8 +153,15 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,14,26,0.8
 .sec-zone .icon{font-size:2.4rem}
 .sec-zone .lbl{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);text-align:center}
 .sec-wall{width:60px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:0.3rem;z-index:2}
-.wall-brick{width:56px;height:14px;background:linear-gradient(135deg,rgba(0,212,170,0.25),rgba(0,212,170,0.1));border:1px solid rgba(0,212,170,0.3);border-radius:3px}
+.sec-wall{transition:transform 0.2s var(--ease), filter 0.25s var(--ease)}
+.wall-brick{width:56px;height:14px;background:linear-gradient(135deg,rgba(0,212,170,0.25),rgba(0,212,170,0.1));border:1px solid rgba(0,212,170,0.3);border-radius:3px;transition:background 0.25s var(--ease), border-color 0.25s var(--ease), box-shadow 0.25s var(--ease)}
 .sec-wall .wlbl{font-family:var(--font-mono);font-size:0.6rem;color:var(--green);text-align:center;margin-top:0.3rem}
+.sec-wall .wlmode{font-weight:900;letter-spacing:0.06em}
+.sec-wall.wall-allow .wall-brick{background:linear-gradient(135deg,rgba(0,212,170,0.38),rgba(0,212,170,0.14));border-color:rgba(0,212,170,0.75);box-shadow:0 0 18px rgba(0,212,170,0.22)}
+.sec-wall.wall-deny .wall-brick{background:linear-gradient(135deg,rgba(239,68,68,0.38),rgba(239,68,68,0.14));border-color:rgba(239,68,68,0.75);box-shadow:0 0 18px rgba(239,68,68,0.22)}
+.sec-wall.wall-deny{animation:secWallShake 0.55s ease}
+.sec-wall.wall-deny .wlbl{color:var(--red)}
+@keyframes secWallShake{0%,100%{transform:translateX(0)}20%{transform:translateX(-4px)}60%{transform:translateX(3px)}}
 .packet{position:absolute;width:44px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:0.62rem;font-weight:700;transition:none;z-index:5;left:72px;top:50%;transform:translateY(-50%)}
 .packet.allow{background:rgba(0,212,170,0.2);border:1.5px solid var(--green);color:var(--green)}
 .packet.deny{background:rgba(239,68,68,0.2);border:1.5px solid var(--red);color:var(--red)}
@@ -711,8 +718,8 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,14,26,0.8
     <div>
       <div class="section-label">§ 06 — Seccomp & Capabilities</div>
       <h2 class="section-title">系統呼叫<span>過濾牆</span></h2>
-      <p class="section-desc">Seccomp（Secure Computing Mode）在容器的 App 與 Linux Kernel 之間建立一道過濾牆，只允許白名單內的系統呼叫通過，其餘一律拒絕。</p>
-      <p class="section-desc mt2">Capabilities 則更細緻地控制 root 的特定特權，例如允許 <span class="code">CAP_NET_BIND_SERVICE</span> 但拒絕 <span class="code">CAP_SYS_ADMIN</span>。</p>
+      <p class="section-desc">Seccomp 可以理解成「在容器 App 與 Linux Kernel 之間加一道過濾牆」。當容器內的程式發出系統呼叫（syscall）時，kernel 會先把它交給 <strong>seccomp filter</strong> 檢查：<strong>只有白名單（allowlist）裡列出的 syscall 才會通過</strong>；不在白名單裡的 syscall 會被 <strong>立刻拒絕</strong>（通常是直接回傳 errno，讓攻擊流程在嘗試 syscall 的瞬間就失敗）。因此攻擊面會大幅縮小：程式就算能跑起來，也做不了你沒允許的那類操作。</p>
+      <p class="section-desc mt2">Capabilities 可以理解成「把傳統 root 的權限切成很多小碎片」。你不需要一次把整個 root 的能力通通給出去，而是只挑你真的需要的那幾塊：例如只給 <span class="code">CAP_NET_BIND_SERVICE</span>，讓容器內程式能綁定低號 port；但不給 <span class="code">CAP_SYS_ADMIN</span>，就能避免它做過頭的高風險操作（像是某些 mount/系統層級設定等）。簡單講：<strong>seccomp 管能不能做（能發哪些 syscall）</strong>，capabilities 管做得到的細節權限。</p>
       <div class="sec-controls">
         <button class="syscall-btn allow-mode" onclick="fireSyscall('read','allow')">read()</button>
         <button class="syscall-btn allow-mode" onclick="fireSyscall('write','allow')">write()</button>
@@ -899,74 +906,75 @@ nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,14,26,0.8
     </div>
 
     <div class="viz mt3">
-      <div class="viz-title">// 完整手動流程（Ubuntu 22.04 / 24.04，於宿主機終端機執行）</div>
+      <div class="viz-title">// 完整手動流程（Ubuntu 24.04 新機：從 0 到 runc run）</div>
       <div class="lab-scroll">
-        <div class="lab-h">0 — 安裝依賴</div>
-        <p>需要 root。若用 Docker 匯出 rootfs，請裝 Docker；若不用 Docker，可改走「方案 B」Alpine tarball。</p>
+        <div class="lab-h">0 — 安裝工具（宿主機 Ubuntu 24.04）</div>
+        <p>需要 root。這份實作 <strong>只使用 Ubuntu 24.04 (noble) debootstrap</strong> 產生 rootfs，沒有 BusyBox/Alpine/Docker ABC 分支。</p>
         <pre>sudo apt update
-sudo apt install -y runc curl jq nano ca-certificates iproute2</pre>
-        <pre># 選用：從 Docker 映像匯出 rootfs（與多數教學相同）
-sudo apt install -y docker.io
-sudo systemctl enable --now docker</pre>
+sudo apt install -y runc debootstrap jq nano ca-certificates</pre>
 
-        <div class="lab-h">1 — 建立 OCI bundle 目錄</div>
+        <div class="lab-h">1 — 建立 OCI bundle（runtime 的輸入資料夾）</div>
+        <p><strong>bundle = rootfs/ + config.json</strong>。runc 的精華在於：它不看「你用什麼 image」，只看你給的 bundle 契約。</p>
         <pre>mkdir -p ~/oci-bb8/rootfs
 cd ~/oci-bb8</pre>
 
-        <div class="lab-h">2 — 填入 rootfs（擇一）</div>
-        <p><strong style="color:var(--text)">方案 A（BusyBox，需 Docker）</strong> — 與截圖中 <span class="code">/bin → busybox</span> 行為一致。</p>
-        <pre>sudo docker create --name bb-export busybox:latest sh
-sudo docker export bb-export | sudo tar -C rootfs -xf -
-sudo docker rm bb-export
-test -x rootfs/bin/sh && echo "OK: rootfs/bin/sh"</pre>
-        <p><strong style="color:var(--text)">方案 B（Alpine minirootfs，免 Docker）</strong> — 類似你另一張圖：下載官方 minirootfs 再解到 <span class="code">rootfs/</span>。請到 <a href="https://dl-cdn.alpinelinux.org/alpine/" target="_blank" rel="noopener">Alpine 發行目錄</a> 換成目前穩定版連結。</p>
-        <pre>curl -fsSL -o alpine.tar.gz "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-minirootfs-3.19.3-x86_64.tar.gz"
-sudo tar xzf alpine.tar.gz -C rootfs
-rm -f alpine.tar.gz
-test -x rootfs/bin/sh && echo "OK: rootfs/bin/sh"</pre>
-        <p><strong style="color:var(--text)">方案 C（极小 Ubuntu rootfs，較大下載）</strong></p>
-        <pre>sudo apt install -y debootstrap
-sudo debootstrap jammy rootfs http://archive.ubuntu.com/ubuntu/</pre>
+        <div class="lab-h">2 — 用 debootstrap 建 Ubuntu 24.04 rootfs</div>
+        <p>這一步在做「檔案系統」。讓容器真的有 <span class="code">/bin/sh</span>、基本命令與 apt。</p>
+        <pre>sudo debootstrap --variant=minbase noble rootfs http://archive.ubuntu.com/ubuntu/
+test -x rootfs/bin/sh && echo "OK: rootfs/bin/sh exists"</pre>
 
-        <div class="lab-h">3 — 將 rootfs 擁有者改為 root（runc 常要求·與教學說明一致）</div>
-        <p>若你是用一般使用者下載解壓，目錄可能是 <span class="code">ubuntu:ubuntu</span>；建議整個 bundle 交給 root。</p>
+        <div class="lab-h">3 — 在 rootfs 裝驗證用工具（ip/ps/hostname）</div>
+        <p>runtime 只負責隔離與掛載；我們要觀察隔離結果，所以把觀察工具（iproute2/procps/util-linux）裝進 rootfs。</p>
+        <pre>sudo cp /etc/resolv.conf rootfs/etc/resolv.conf
+sudo chroot rootfs /bin/sh -c "apt-get update &&
+  apt-get install -y iproute2 procps util-linux ca-certificates"</pre>
+
+        <div class="lab-h">4 — 交給 root：避免 bundle 權限地雷</div>
+        <p>把整個 bundle 的擁有者改成 root。原因是 runc 會需要對 rootfs/config 做準備與掛載操作。</p>
         <pre>sudo chown -R root:root ~/oci-bb8</pre>
 
-        <div class="lab-h">4 — 產生並編輯 OCI <span class="code">config.json</span></div>
-        <p>對齊教學範例：hostname <span class="code">dagger</span>、互動 shell、<span class="code">args: ["sh"]</span>、root 指向 <span class="code">rootfs</span>。<span class="code">runc spec</span> 會帶入預設 namespaces 與 <span class="code">/proc</span> 掛載。</p>
+        <div class="lab-h">5 — 生成並編輯 OCI <span class="code">config.json</span>（runc 的契約）</div>
+        <p>你修改的是 <strong>runtime 必用的 contract</strong>：<span class="code">hostname</span>、<span class="code">process.args</span>（跑什麼）、<span class="code">root.path</span>（rootfs 指向哪裡）、以及 <span class="code">/proc</span> 掛載。</p>
         <pre>cd ~/oci-bb8
 sudo runc spec</pre>
-        <p>用 <span class="code">nano</span> 手改，或一次性用 <span class="code">jq</span>（擇一）：</p>
-        <pre>sudo nano config.json</pre>
+        <p>一次性套用最小必要修改：</p>
         <pre>sudo cp config.json config.json.bak
 sudo jq '.hostname = "dagger"
   | .process.terminal = true
-  | .process.args = ["sh"]
-  | .process.user = {"uid": 0, "gid": 0}
-  | .root = (.root // {}) | .root.path = "rootfs" | .root.readonly = false' config.json.bak > config.json</pre>
+  | .process.args = ["/bin/sh"]
+  | .process.user = {"uid":0, "gid":0}
+  | .root = (.root // {})
+  | .root.path = "rootfs"
+  | .root.readonly = false
+  | .mounts = ((.mounts // [])
+      | map(select(.destination != "/proc"))
+      + [{"destination":"/proc","type":"proc","source":"proc","options":["nosuid","nodev","noexec"]}])' \
+  config.json.bak > config.json</pre>
+        <p>（可選）最後用 nano 快速確認：</p>
+        <pre>sudo nano config.json</pre>
 
-        <div class="lab-h">5 — 以互動方式啟動容器（對齊 <span class="code">runc run bb8</span>）</div>
+        <div class="lab-h">6 — 用 runc 啟動容器（對齊 <span class="code">sudo runc run bb8</span>）</div>
+        <p>這一步等於把 <span class="code">create → start</span> 包在一起做：依 config.json 建隔離（namespaces）、掛載（mounts），再執行 <span class="code">process.args</span>。</p>
         <pre>cd ~/oci-bb8
 sudo runc run bb8</pre>
-        <p>應進入容器內 shell（提示字可能類似 <span class="code">/ #</span>）。離開表示結束該次容器行程：<span class="code">exit</span>。</p>
+        <p>進入容器 shell 後輸入：<span class="code">exit</span>。</p>
 
-        <div class="lab-h">6 — 在容器內驗證隔離（與教材截圖對應）</div>
+        <div class="lab-h">7 — 在容器內驗證：隔離 + rootfs 可寫入 + /proc 受保護</div>
+        <p>你要看的是三件事：1) hostname=dagger 代表 UTS 命名空間生效；2) ip/ps 反映 NET/PID 隔離；3) /proc 是 kernel 介面，刪除應被擋。</p>
         <pre>hostname
+cat /etc/hostname
 ip a s
-ps aux
-ls -al /bin | head -n 8</pre>
-        <p>預期：<span class="code">hostname</span> 為 <span class="code">dagger</span>；網路命名空間隔離時通常只見 <span class="code">lo</span>；<span class="code">ps</span> 中 <span class="code">sh</span> 為 PID 1；用 BusyBox/Alpine 時 <span class="code">/bin</span> 底下常見指向 busybox 的 symlink。</p>
+ps aux | head -n 5
+ls -al /bin | head -n 10
+mkdir -p /zzz
+echo "hello" > /zzz/hello
 
-        <div class="lab-h">7 — rootfs 會被寫入；虛擬檔案受核心保護</div>
-        <p>在容器內仍是 root，變更會寫回<strong>宿主機上的同一份</strong> <span class="code">rootfs/</span>，因此不適合再給「另一個乾淨容器」共用同一路徑而不重建。<span class="code">/proc</span> 下為核心介面，刪除會失敗。</p>
-        <pre>whoami
-mkdir /zzz
-rm /bin/zcat
+rm -f /bin/hostname
 cat /proc/meminfo | head -n 3
 rm /proc/meminfo</pre>
-        <p>預期：<span class="code">rm /proc/meminfo</span> 出現 <span class="code">Permission denied</span>（或類似錯誤）。離開：<span class="code">exit</span>。</p>
+        <p>預期：<span class="code">rm /proc/meminfo</span> 失敗（常見 <span class="code">Permission denied</span>）。</p>
 
-        <div class="lab-h">8 — 進階：拆步生命週期（可選，對照本頁 §07）</div>
+        <div class="lab-h">8 — 可選：拆步生命週期（對照本頁 §07）</div>
         <pre>cd ~/oci-bb8
 sudo runc create myct
 sudo runc state myct
@@ -982,8 +990,8 @@ sudo runc delete myct</pre>
         <div class="lab-step" data-labstep="0">
           <div class="lab-dot">0</div>
           <div class="lab-meta">
-            <div class="lab-name">Ubuntu 依賴</div>
-            <div class="lab-sub">runc / curl / jq / nano …</div>
+            <div class="lab-name">安裝工具</div>
+            <div class="lab-sub">runc + debootstrap + jq …</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="1">
@@ -996,43 +1004,43 @@ sudo runc delete myct</pre>
         <div class="lab-step" data-labstep="2">
           <div class="lab-dot">2</div>
           <div class="lab-meta">
-            <div class="lab-name">填入 rootfs</div>
-            <div class="lab-sub">Docker BusyBox 或 Alpine tgz</div>
+            <div class="lab-name">debootstrap rootfs</div>
+            <div class="lab-sub">Ubuntu 24.04 (noble)</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="3">
           <div class="lab-dot">3</div>
           <div class="lab-meta">
-            <div class="lab-name">chown root</div>
-            <div class="lab-sub">與 runc 權限要求一致</div>
+            <div class="lab-name">裝驗證工具</div>
+            <div class="lab-sub">iproute2 / procps / util-linux</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="4">
           <div class="lab-dot">4</div>
           <div class="lab-meta">
-            <div class="lab-name">runc spec + 編修</div>
-            <div class="lab-sub">hostname dagger、args sh</div>
+            <div class="lab-name">chown root:root</div>
+            <div class="lab-sub">避免 bundle 權限問題</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="5">
           <div class="lab-dot">5</div>
           <div class="lab-meta">
-            <div class="lab-name">runc run bb8</div>
-            <div class="lab-sub">進互動 shell</div>
+            <div class="lab-name">runc spec + 編修</div>
+            <div class="lab-sub">hostname dagger、process=/bin/sh</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="6">
           <div class="lab-dot">6</div>
           <div class="lab-meta">
-            <div class="lab-name">驗證隔離</div>
-            <div class="lab-sub">hostname / ip / ps / ls /bin</div>
+            <div class="lab-name">runc run bb8</div>
+            <div class="lab-sub">create → start → shell</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="7">
           <div class="lab-dot">7</div>
           <div class="lab-meta">
-            <div class="lab-name">rootfs 變更 + /proc</div>
-            <div class="lab-sub">寫入層與核心保護</div>
+            <div class="lab-name">驗證隔離 + /proc</div>
+            <div class="lab-sub">rootfs 可寫、/proc 受保護</div>
           </div>
         </div>
         <div class="lab-step" data-labstep="8">
@@ -1405,24 +1413,28 @@ function labSetTree(step){
   if(!tree) return;
   const s=Math.max(0,Math.min(step,8));
   if(s===0){
-    tree.innerHTML=`<div><span class="m">~/oci-bb8/</span><br><span class="m">(尚未建立：先安裝 runc / curl / jq …)</span></div>`;
+    tree.innerHTML=`<div><span class="m">~/oci-bb8/</span><br><span class="m">(尚未建立：先安裝 runc / debootstrap / jq …)</span></div>`;
     return;
   }
   let html=`<div><span class="m">~/oci-bb8/</span><br>├─ <span class="g">rootfs/</span>`;
   if(s>=2){
-    html+=`<br>│&nbsp;&nbsp;└─ <span class="g">bin/sh</span> <span class="m">+ busybox symlinks</span>`;
+    html+=`<br>│&nbsp;&nbsp;└─ <span class="g">bin/sh</span> <span class="m">(Ubuntu 24.04)</span>`;
   }else{
-    html+=`<br>│&nbsp;&nbsp;<span class="m">(空目錄，等待 tar / export)</span>`;
+    html+=`<br>│&nbsp;&nbsp;<span class="m">(空目錄，等待 debootstrap)</span>`;
+  }
+  if(s>=3){
+    html+=`<br>│&nbsp;&nbsp;&nbsp;&nbsp;└─ <span class="g">/bin/ip</span> / <span class="g">ps</span> / <span class="g">hostname</span>`;
   }
   html+=`<br>`;
-  if(s>=4){
-    html+=`└─ <span class="g">config.json</span> <span class="m">· hostname dagger · terminal true</span>`;
+  if(s>=5){
+    html+=`└─ <span class="g">config.json</span> <span class="m">· hostname dagger · args /bin/sh</span><br><span class="m">// mounts: /proc (type=proc)</span>`;
   }else{
     html+=`└─ <span class="m">config.json 尚未生成</span>`;
   }
-  if(s>=3 && s<4) html+=`<br><span class="m">// 已 sudo chown -R root:root ~/oci-bb8</span>`;
-  if(s>=5 && s<8) html+=`<br><span class="m">// sudo runc run bb8 → 新 UTS / NET / PID …</span>`;
-  if(s>=8) html+=`<br><span class="m">// 可選：runc create → start → kill → delete</span>`;
+  if(s>=4 && s<5) html+=`<br><span class="m">// sudo chown -R root:root ~/oci-bb8</span>`;
+  if(s>=6 && s<7) html+=`<br><span class="m">// runc run bb8 → 建立 namespaces / mounts</span>`;
+  if(s>=7) html+=`<br><span class="m">// rootfs 可寫入；/proc 受核心保護</span>`;
+  if(s>=8) html+=`<br><span class="m">// 可選：create → start → kill → delete</span>`;
   html+=`</div>`;
   tree.innerHTML=html;
 }
@@ -1438,76 +1450,73 @@ function labShow(step){
 
   if(step===0){
     labPrint([
-      `<span class="dim"># step 0：Ubuntu 依賴</span>`,
-      `<span class="prompt">$</span> sudo apt update && sudo apt install -y runc curl jq nano ca-certificates iproute2`,
-      `<span class="ok">… Setting up runc …</span>`,
+      `<span class="dim"># step 0：宿主機安裝工具</span>`,
+      `<span class="prompt">$</span> sudo apt update && sudo apt install -y runc debootstrap jq nano ca-certificates`,
+      `<span class="ok">… Setting up packages …</span>`,
       `<span class="prompt">$</span> runc --version`,
-      `<span class="ok">runc version 1.x.x</span> <span class="dim">(依套件庫)</span>`,
-      `<span class="dim"># 若走 BusyBox rootfs，另裝： sudo apt install -y docker.io</span>`
+      `<span class="ok">runc version 1.x.x</span> <span class="dim">(依 Ubuntu 套件庫)</span>`,
+      `<span class="dim"># 你只需要宿主機有 runc & debootstrap</span>`
     ],130);
   }else if(step===1){
     labPrint([
-      `<span class="dim"># step 1：建立 bundle</span>`,
+      `<span class="dim"># step 1：建立 bundle（bundle = rootfs/ + config.json）</span>`,
       `<span class="prompt">$</span> mkdir -p ~/oci-bb8/rootfs && cd ~/oci-bb8`,
-      `<span class="prompt">$</span> pwd`,
-      `<span class="ok">/home/ubuntu/oci-bb8</span> <span class="dim">(示意)</span>`,
-      `<span class="dim"># 此時僅有 rootfs/，尚無 config.json</span>`
+      `<span class="dim"># 先把目錄準備好：runc 只讀 bundle 契約</span>`
     ],130);
   }else if(step===2){
     labPrint([
-      `<span class="dim"># step 2：填入 rootfs（BusyBox 示例，與教材 /bin→busybox 一致）</span>`,
-      `<span class="prompt">$</span> sudo docker create --name bb-export busybox:latest sh`,
-      `<span class="prompt">$</span> sudo docker export bb-export | sudo tar -C rootfs -xf -`,
-      `<span class="prompt">$</span> sudo docker rm bb-export`,
-      `<span class="prompt">$</span> test -x rootfs/bin/sh && echo OK`,
-      `<span class="ok">OK</span>`,
-      `<span class="dim"># 免 Docker 可改：curl alpine-minirootfs.tar.gz | sudo tar -C rootfs -xz</span>`
+      `<span class="dim"># step 2：debootstrap 建 Ubuntu 24.04 rootfs</span>`,
+      `<span class="prompt">$</span> sudo debootstrap --variant=minbase noble rootfs http://archive.ubuntu.com/ubuntu/`,
+      `<span class="prompt">$</span> test -x rootfs/bin/sh && echo "OK: rootfs/bin/sh exists"`,
+      `<span class="ok">OK: rootfs/bin/sh exists</span>`,
+      `<span class="dim"># 這一步是在準備容器的檔案系統</span>`
     ],125);
   }else if(step===3){
     labPrint([
-      `<span class="dim"># step 3：擁有者改為 root（runc 常要求；避免 rootfs 屬於一般使用者）</span>`,
-      `<span class="prompt">$</span> sudo chown -R root:root ~/oci-bb8`,
-      `<span class="dim"># 完成後整個 bundle 適合 sudo runc …</span>`
+      `<span class="dim"># step 3：把觀察工具裝進 rootfs（ip/ps/hostname）</span>`,
+      `<span class="prompt">$</span> sudo cp /etc/resolv.conf rootfs/etc/resolv.conf`,
+      `<span class="prompt">$</span> sudo chroot rootfs /bin/sh -c "apt-get update && apt-get install -y iproute2 procps util-linux ca-certificates"`,
+      `<span class="ok">… done …</span>`,
+      `<span class="dim"># runtime 隔離好後，還要有工具可以驗證結果</span>`
     ],130);
   }else if(step===4){
     labPrint([
-      `<span class="dim"># step 4：runc spec + 編修 config.json</span>`,
-      `<span class="prompt">$</span> cd ~/oci-bb8 && sudo runc spec`,
-      `<span class="dim"># 手動 nano，或 jq：hostname dagger、terminal true、args [&quot;sh&quot;]、root.path rootfs</span>`,
-      `<span class="prompt">$</span> sudo jq -r '.hostname, .process.args[0], .root.path' config.json`,
-      `<span class="ok">dagger</span>`,
-      `<span class="ok">sh</span>`,
-      `<span class="ok">rootfs</span>`
-    ],125);
+      `<span class="dim"># step 4：把 bundle 擁有者改為 root</span>`,
+      `<span class="prompt">$</span> sudo chown -R root:root ~/oci-bb8`,
+      `<span class="dim"># 這樣 runc 在準備 mount/cgroups 時不容易踩權限問題</span>`
+    ],130);
   }else if(step===5){
     labPrint([
-      `<span class="dim"># step 5：互動啟動（容器名 bb8）</span>`,
-      `<span class="prompt">$</span> cd ~/oci-bb8 && sudo runc run bb8`,
-      `<span class="dim"># 進入容器 root shell，提示字可能為：</span>`,
-      `<span class="prompt">/ #</span> <span class="dim">_</span>`
-    ],140);
+      `<span class="dim"># step 5：runc spec → 編輯 config.json（runc 的契約）</span>`,
+      `<span class="prompt">$</span> cd ~/oci-bb8 && sudo runc spec`,
+      `<span class="dim"># 用 jq 只改最必要欄位：hostname、process.args、root.path、/proc mounts</span>`,
+      `<span class="prompt">$</span> sudo jq ... config.json.bak &gt; config.json`,
+      `<span class="ok">hostname=dagger</span>`,
+      `<span class="ok">process.args=[&quot;/bin/sh&quot;]</span>`,
+      `<span class="ok">mounts: destination=/proc (type=proc)</span>`,
+      `<span class="dim"># （可選）sudo nano config.json</span>`
+    ],125);
   }else if(step===6){
     labPrint([
-      `<span class="dim"># step 6：在容器內驗證隔離</span>`,
+      `<span class="dim"># step 6：sudo runc run bb8（create+start 合併）</span>`,
+      `<span class="prompt">$</span> cd ~/oci-bb8 && sudo runc run bb8`,
+      `<span class="dim"># 進入容器：</span>`,
+      `<span class="prompt">/ #</span> <span class="dim">_</span>`
+    ],140);
+  }else if(step===7){
+    labPrint([
+      `<span class="dim"># step 7：驗證隔離 + rootfs 可寫 + /proc 受保護</span>`,
       `<span class="prompt">/ #</span> hostname`,
       `<span class="ok">dagger</span>`,
       `<span class="prompt">/ #</span> ip a s`,
       `<span class="ok">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; …</span>`,
-      `<span class="ok">&nbsp;&nbsp;&nbsp;inet 127.0.0.1/8 scope host lo</span>`,
-      `<span class="dim"># 僅 lo：獨立 network namespace</span>`,
-      `<span class="prompt">/ #</span> ps aux`,
-      `<span class="ok">PID USER … COMMAND</span>`,
-      `<span class="ok">&nbsp;&nbsp;1 root … sh</span>`,
-      `<span class="prompt">/ #</span> ls -al /bin | head -n 5`,
-      `<span class="ok">arch -> /bin/busybox</span> <span class="dim">(BusyBox 時)</span>`
-    ],115);
-  }else if(step===7){
-    labPrint([
-      `<span class="dim"># step 7：改動寫回宿主機 rootfs/；/proc 受保護</span>`,
-      `<span class="prompt">/ #</span> whoami`,
-      `<span class="ok">root</span>`,
-      `<span class="prompt">/ #</span> mkdir /zzz`,
-      `<span class="prompt">/ #</span> rm /bin/zcat`,
+      `<span class="ok">&nbsp;&nbsp;inet 127.0.0.1/8 scope host lo</span>`,
+      `<span class="prompt">/ #</span> ps aux | head -n 5`,
+      `<span class="ok">&nbsp;&nbsp;PID … sh</span>`,
+      `<span class="prompt">/ #</span> ls -al /bin | head -n 10`,
+      `<span class="ok">… /bin/sh …</span>`,
+      `<span class="prompt">/ #</span> mkdir -p /zzz`,
+      `<span class="prompt">/ #</span> echo "hello" &gt; /zzz/hello`,
       `<span class="prompt">/ #</span> cat /proc/meminfo | head -n 3`,
       `<span class="ok">MemTotal:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;… kB</span>`,
       `<span class="prompt">/ #</span> rm /proc/meminfo`,
@@ -1516,7 +1525,7 @@ function labShow(step){
     ],120);
   }else if(step===8){
     labPrint([
-      `<span class="dim"># step 8（可選）：拆步 lifecycle（別名可自訂，勿與 bb8 衝突）</span>`,
+      `<span class="dim"># step 8（可選）：拆步 lifecycle（create/start/kill/delete）</span>`,
       `<span class="prompt">$</span> cd ~/oci-bb8`,
       `<span class="prompt">$</span> sudo runc create myct`,
       `<span class="prompt">$</span> sudo runc state myct`,
@@ -1642,13 +1651,23 @@ function fireSyscall(name,mode){
   const p=document.getElementById('packet-el');
   const p2=document.getElementById('packet2-el');
   const ex=document.getElementById('explode-el');
+  const wall=stage.querySelector('.sec-wall');
+  const wl=stage.querySelector('.sec-wall .wlbl');
+
+  if(wall) wall.classList.remove('wall-allow','wall-deny');
+  if(wl){
+    wl.innerHTML=`Seccomp<br>Filter`;
+  }
+  // 先把狀態重置成「等待下一次點按」
+  p2.style.display='none';
   p.className='packet '+(mode==='allow'?'allow':'deny');
   p.textContent=name+'()';
   p.style.cssText=`display:flex;left:72px;top:50%;transform:translateY(-50%);transition:none`;
-  p2.style.display='none';
   ex.style.opacity='0';
   void p.offsetWidth;
   if(mode==='allow'){
+    if(wall) wall.classList.add('wall-allow');
+    if(wl){wl.innerHTML=`Seccomp<br><span class="wlmode">ALLOW</span>`;}
     p.style.transition='left 0.45s cubic-bezier(0.4,0,0.2,1)';
     p.style.left='calc(50% - 60px)';
     setTimeout(()=>{
@@ -1663,19 +1682,31 @@ function fireSyscall(name,mode){
       setTimeout(()=>{p.style.display='none';p2.style.display='none';secBusy=false;},500);
     },500);
     addLog(name+'()', true);
+    // 讓牆在動畫後回到一般狀態
+    setTimeout(()=>{
+      if(wall) wall.classList.remove('wall-allow');
+      if(wl){wl.innerHTML=`Seccomp<br>Filter`;}
+    },850);
   }else{
+    if(wall) wall.classList.add('wall-deny');
+    if(wl){wl.innerHTML=`Seccomp<br><span class="wlmode">DENY</span>`;}
     p.style.transition='left 0.45s cubic-bezier(0.4,0,0.2,1)';
     p.style.left='calc(50% - 80px)';
     setTimeout(()=>{
-      ex.style.left=p.style.left;
+      // 爆點對齊牆中央：讓「被擋」一眼看懂
+      ex.style.left='50%';
       ex.style.top='50%';
-      ex.style.transform='translateY(-50%)';
+      ex.style.transform='translate(-50%, -50%)';
       ex.style.opacity='1';
       ex.style.transition='opacity 0.5s 0.3s';
       p.style.display='none';
       setTimeout(()=>{ex.style.opacity='0';secBusy=false;},900);
     },500);
     addLog(name+'()', false);
+    setTimeout(()=>{
+      if(wall) wall.classList.remove('wall-deny');
+      if(wl){wl.innerHTML=`Seccomp<br>Filter`;}
+    },900);
   }
 }
 function addLog(name, allowed){
