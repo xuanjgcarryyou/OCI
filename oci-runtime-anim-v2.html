@@ -1,0 +1,1889 @@
+<!DOCTYPE html>
+<html lang="zh-Hant" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCI Container Runtime Spec — 互動教學</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Tokens ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a;
+  --bg2:#0f1420;
+  --bg3:#151c2e;
+  --surface:#1a2138;
+  --border:rgba(0,212,170,0.15);
+  --text:#e2e8f0;
+  --muted:#64748b;
+  --faint:#334155;
+  --green:#00d4aa;
+  --green2:#00ffcc;
+  --orange:#f97316;
+  --red:#ef4444;
+  --blue:#60a5fa;
+  --purple:#a78bfa;
+  --yellow:#fbbf24;
+  --font-mono:'JetBrains Mono',monospace;
+  --font-body:'Inter',sans-serif;
+  --r:8px;
+  --r2:16px;
+  --ease:cubic-bezier(0.16,1,0.3,1);
+}
+html{scroll-behavior:smooth;background:var(--bg)}
+body{font-family:var(--font-body);color:var(--text);overflow-x:hidden;line-height:1.6}
+
+/* ── Nav ── */
+nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,14,26,0.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--border);padding:0 2rem;display:flex;align-items:center;gap:1rem;height:56px;overflow-x:auto;white-space:nowrap}
+.nav-logo{font-family:var(--font-mono);font-weight:700;color:var(--green);font-size:0.9rem;margin-right:1rem;flex-shrink:0}
+.nav-link{font-size:0.78rem;color:var(--muted);text-decoration:none;padding:0.3rem 0.7rem;border-radius:var(--r);transition:all 0.2s;flex-shrink:0;font-family:var(--font-mono)}
+.nav-link:hover,.nav-link.active{color:var(--green);background:rgba(0,212,170,0.1)}
+
+/* ── Section Layout ── */
+.section{min-height:100vh;padding:88px clamp(1.25rem,3vw,3.75rem) 4.75rem;display:flex;flex-direction:column;justify-content:center;border-bottom:1px solid var(--border)}
+.section-inner{max-width:1480px;margin:0 auto;width:100%;display:grid;grid-template-columns:1.05fr 0.95fr;gap:clamp(2rem,4vw,5rem);align-items:center}
+.section-inner.wide{grid-template-columns:1fr}
+@media(max-width:900px){.section-inner{grid-template-columns:1fr;gap:2rem}}
+.section-label{font-family:var(--font-mono);font-size:0.7rem;color:var(--green);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:0.75rem}
+.section-title{font-size:clamp(1.5rem,3vw,2.2rem);font-weight:700;line-height:1.2;margin-bottom:1rem}
+.section-title span{color:var(--green)}
+.section-desc{color:var(--muted);font-size:0.95rem;line-height:1.75;max-width:52ch}
+.section-desc+.section-desc{margin-top:0.75rem}
+
+/* ── Canvas / Viz panels ── */
+.viz{background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);padding:clamp(1.25rem,2.2vw,1.9rem);position:relative;overflow:hidden}
+.viz-title{font-family:var(--font-mono);font-size:0.72rem;color:var(--green);margin-bottom:1rem;letter-spacing:0.1em}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:0.5rem;padding:0.5rem 1.2rem;border-radius:var(--r);font-size:0.85rem;font-weight:600;cursor:pointer;border:none;transition:all 0.2s var(--ease);font-family:var(--font-body)}
+.btn-primary{background:var(--green);color:#000}
+.btn-primary:hover{background:var(--green2);transform:translateY(-1px)}
+.btn-ghost{background:transparent;color:var(--green);border:1px solid var(--border)}
+.btn-ghost:hover{background:rgba(0,212,170,0.08);border-color:var(--green)}
+.btn-sm{padding:0.3rem 0.8rem;font-size:0.78rem}
+
+/* ── Tag/Badge ── */
+.tag{display:inline-block;padding:0.2rem 0.6rem;border-radius:9999px;font-size:0.72rem;font-family:var(--font-mono);font-weight:600;border:1px solid}
+.tag-green{color:var(--green);border-color:rgba(0,212,170,0.3);background:rgba(0,212,170,0.08)}
+.tag-orange{color:var(--orange);border-color:rgba(249,115,22,0.3);background:rgba(249,115,22,0.08)}
+.tag-red{color:var(--red);border-color:rgba(239,68,68,0.3);background:rgba(239,68,68,0.08)}
+.tag-blue{color:var(--blue);border-color:rgba(96,165,250,0.3);background:rgba(96,165,250,0.08)}
+.tag-purple{color:var(--purple);border-color:rgba(167,139,250,0.3);background:rgba(167,139,250,0.08)}
+
+/* ════════════════════════════════════
+   § 1 OVERVIEW — three-spec diagram
+   ════════════════════════════════════ */
+.spec-chain{display:flex;align-items:center;justify-content:center;gap:0;padding:2rem 1rem;flex-wrap:wrap}
+.spec-node{background:var(--surface);border:2px solid var(--border);border-radius:var(--r2);padding:1.2rem 1.4rem;text-align:center;opacity:0;transform:translateY(30px);transition:all 0.6s var(--ease);min-width:130px}
+.spec-node.visible{opacity:1;transform:translateY(0)}
+.spec-node .icon{font-size:2rem;margin-bottom:0.5rem}
+.spec-node .name{font-family:var(--font-mono);font-size:0.75rem;font-weight:700;color:var(--green);margin-bottom:0.2rem}
+.spec-node .sub{font-size:0.7rem;color:var(--muted)}
+.spec-node.active-node{border-color:var(--green);box-shadow:0 0 24px rgba(0,212,170,0.25)}
+.spec-arrow{width:60px;height:2px;background:linear-gradient(90deg,var(--green),var(--green2));position:relative;flex-shrink:0;opacity:0;transition:opacity 0.6s 0.4s}
+.spec-arrow.visible{opacity:1}
+.spec-arrow::after{content:'';position:absolute;right:-6px;top:-4px;border:5px solid transparent;border-left-color:var(--green2)}
+
+/* ════════════════════════════════════
+   § 2 BUNDLE — folder animation
+   ════════════════════════════════════ */
+.bundle-stage{display:flex;align-items:center;justify-content:center;gap:2rem;padding:1rem;flex-wrap:wrap}
+.file-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:0.6rem 1rem;font-family:var(--font-mono);font-size:0.78rem;color:var(--text);display:flex;align-items:center;gap:0.5rem;opacity:0;transform:translateX(-60px);transition:all 0.5s var(--ease)}
+.file-item.in{opacity:1;transform:translateX(0)}
+.file-item .fi{font-size:1.1rem}
+.bundle-box{background:var(--bg);border:2px dashed var(--border);border-radius:var(--r2);padding:1.5rem;min-width:220px;text-align:center;transition:border-color 0.4s,box-shadow 0.4s}
+.bundle-box.sealed{border-style:solid;border-color:var(--green);box-shadow:0 0 20px rgba(0,212,170,0.2)}
+.bundle-box .bundle-label{font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);margin-bottom:0.75rem}
+.bundle-files{display:flex;flex-direction:column;gap:0.4rem}
+.bundle-file{padding:0.4rem 0.75rem;background:var(--surface);border-radius:var(--r);font-family:var(--font-mono);font-size:0.75rem;opacity:0;transform:scale(0.8);transition:all 0.4s var(--ease);display:flex;align-items:center;gap:0.5rem}
+.bundle-file.appear{opacity:1;transform:scale(1)}
+
+/* ════════════════════════════════════
+   § 3 CONFIG.JSON — interactive fields
+   ════════════════════════════════════ */
+.config-layout{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem}
+@media(max-width:600px){.config-layout{grid-template-columns:1fr}}
+.json-panel{background:var(--bg);border-radius:var(--r);padding:1.2rem;font-family:var(--font-mono);font-size:0.82rem;line-height:1.95;overflow-y:auto;max-height:420px}
+.json-key{cursor:pointer;border-radius:4px;padding:0 3px;transition:background 0.2s}
+.json-key:hover{background:rgba(0,212,170,0.15)}
+.json-key.selected{background:rgba(0,212,170,0.2);color:var(--green)}
+.json-str{color:#a5d6a7}.json-num{color:#81d4fa}.json-bool{color:#ffcc02}.json-comment{color:var(--muted)}
+.config-detail{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:1.2rem;transition:all 0.3s}
+.config-detail h4{font-size:0.85rem;font-weight:700;margin-bottom:0.5rem;color:var(--green)}
+.config-detail p{font-size:0.8rem;color:var(--muted);line-height:1.7}
+.config-detail .ex{margin-top:0.75rem;background:var(--bg);border-radius:6px;padding:0.6rem;font-family:var(--font-mono);font-size:0.72rem;color:#a5d6a7}
+
+/* ════════════════════════════════════
+   § 4 NAMESPACES — selector + compare board (JS)
+   ════════════════════════════════════ */
+.ns-info-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:1rem 1.15rem;font-size:0.8rem;margin-top:0.5rem;min-height:56px;transition:all 0.25s;line-height:1.65}
+.ns-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.5rem;margin-top:0.75rem}
+@media(max-width:600px){.ns-grid{grid-template-columns:repeat(2,1fr)}}
+
+/* ════════════════════════════════════
+   § 5 CGROUPS — resource buckets
+   ════════════════════════════════════ */
+.cgroup-layout{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+@media(max-width:700px){.cgroup-layout{grid-template-columns:1fr}}
+.bucket{display:flex;flex-direction:column;align-items:center;gap:0.75rem}
+.bucket-label{font-family:var(--font-mono);font-size:0.75rem;color:var(--text);font-weight:600}
+.bucket-wrap{position:relative;width:80px;height:140px;border:3px solid var(--border);border-top:none;border-radius:0 0 16px 16px;overflow:hidden;background:var(--bg);transition:border-color 0.3s}
+.bucket-fill{position:absolute;bottom:0;left:0;right:0;background:linear-gradient(to top,var(--green),var(--green2));transition:height 0.5s var(--ease),background 0.3s;height:30%}
+.bucket-pct{font-family:var(--font-mono);font-size:0.9rem;font-weight:700;color:var(--green);transition:color 0.3s}
+.bucket-wrap.warn{border-color:var(--orange)}
+.bucket-wrap.warn .bucket-fill{background:linear-gradient(to top,var(--orange),#fbbf24)}
+.bucket-wrap.warn+*{color:var(--orange)}
+.bucket-wrap.danger{border-color:var(--red);animation:shake 0.4s}
+.bucket-wrap.danger .bucket-fill{background:linear-gradient(to top,var(--red),#f97316);height:100%!important}
+.bucket-wrap.danger+*{color:var(--red)}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}
+.bucket input[type=range]{width:100%;accent-color:var(--green);cursor:pointer}
+.overflow-drop{position:absolute;top:-8px;left:50%;transform:translateX(-50%);font-size:1.2rem;opacity:0;transition:opacity 0.3s;pointer-events:none}
+.bucket-wrap.danger .overflow-drop{opacity:1;animation:drip 0.6s ease infinite}
+@keyframes drip{0%{top:-8px;opacity:1}100%{top:8px;opacity:0}}
+.cgroup-json{margin-top:1.5rem;background:var(--bg);border-radius:var(--r);padding:1rem;font-family:var(--font-mono);font-size:0.73rem;line-height:1.8;border:1px solid var(--border)}
+
+/* ════════════════════════════════════
+   § 6 SECCOMP — packet filter wall
+   ════════════════════════════════════ */
+.seccomp-stage{position:relative;height:340px;background:var(--bg);border-radius:var(--r2);overflow:hidden;display:flex;align-items:center;justify-content:space-between;padding:1.5rem}
+.sec-zone{display:flex;flex-direction:column;align-items:center;gap:0.5rem;z-index:2}
+.sec-zone .icon{font-size:2.4rem}
+.sec-zone .lbl{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);text-align:center}
+.sec-wall{width:60px;flex-shrink:0;display:flex;flex-direction:column;align-items:center;gap:0.3rem;z-index:2}
+.wall-brick{width:56px;height:14px;background:linear-gradient(135deg,rgba(0,212,170,0.25),rgba(0,212,170,0.1));border:1px solid rgba(0,212,170,0.3);border-radius:3px}
+.sec-wall .wlbl{font-family:var(--font-mono);font-size:0.6rem;color:var(--green);text-align:center;margin-top:0.3rem}
+.packet{position:absolute;width:44px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-size:0.62rem;font-weight:700;transition:none;z-index:5;left:72px;top:50%;transform:translateY(-50%)}
+.packet.allow{background:rgba(0,212,170,0.2);border:1.5px solid var(--green);color:var(--green)}
+.packet.deny{background:rgba(239,68,68,0.2);border:1.5px solid var(--red);color:var(--red)}
+.explode{position:absolute;font-size:1.5rem;pointer-events:none;transition:all 0.4s;opacity:0;z-index:10}
+.sec-controls{display:grid;grid-template-columns:repeat(3,1fr);gap:0.5rem;margin-top:1rem}
+.syscall-btn{padding:0.35rem 0.5rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);font-family:var(--font-mono);font-size:0.68rem;cursor:pointer;color:var(--text);transition:all 0.2s;text-align:center}
+.syscall-btn:hover{border-color:var(--green);color:var(--green)}
+.syscall-btn.allow-mode{border-color:rgba(0,212,170,0.4);color:var(--green);background:rgba(0,212,170,0.08)}
+.syscall-btn.deny-mode{border-color:rgba(239,68,68,0.4);color:var(--red);background:rgba(239,68,68,0.08)}
+.sec-log{margin-top:0.75rem;height:60px;overflow-y:auto;background:var(--bg);border-radius:var(--r);padding:0.5rem 0.75rem;font-family:var(--font-mono);font-size:0.68rem}
+.log-entry{opacity:0;transform:translateX(-10px);transition:all 0.3s}
+.log-entry.show{opacity:1;transform:translateX(0)}
+
+/* ════════════════════════════════════
+   § 7 LIFECYCLE — state machine
+   ════════════════════════════════════ */
+.lifecycle-track{position:relative;padding:2rem 0 1rem}
+.lc-nodes{display:flex;align-items:center;justify-content:space-between;position:relative;gap:0}
+.lc-line{flex:1;height:3px;background:var(--faint);position:relative;overflow:hidden}
+.lc-line-fill{position:absolute;inset:0;background:linear-gradient(90deg,var(--green),var(--green2));transform:scaleX(0);transform-origin:left;transition:transform 0.6s var(--ease)}
+.lc-line-fill.active{transform:scaleX(1)}
+.lc-node{display:flex;flex-direction:column;align-items:center;gap:0.4rem;flex-shrink:0}
+.lc-dot{width:52px;height:52px;border-radius:50%;border:3px solid var(--faint);background:var(--bg3);display:flex;align-items:center;justify-content:center;font-size:1.4rem;transition:all 0.4s var(--ease);position:relative;cursor:default}
+.lc-dot.active{border-color:var(--green);background:rgba(0,212,170,0.1);box-shadow:0 0 20px rgba(0,212,170,0.35)}
+.lc-dot.done{border-color:rgba(0,212,170,0.4);background:rgba(0,212,170,0.05)}
+.lc-dot.current{animation:pulse-ring 1.5s ease infinite}
+@keyframes pulse-ring{0%,100%{box-shadow:0 0 0 0 rgba(0,212,170,0.4)}50%{box-shadow:0 0 0 12px rgba(0,212,170,0)}}
+.lc-label{font-family:var(--font-mono);font-size:0.68rem;color:var(--muted);text-align:center;max-width:72px}
+.lc-label.active{color:var(--green)}
+.lc-ops{display:flex;gap:0.6rem;flex-wrap:wrap;justify-content:center;margin-top:1.5rem}
+.lc-op{padding:0.45rem 1rem;border-radius:var(--r);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all 0.2s;user-select:none}
+.lc-op:hover:not(:disabled){border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.08)}
+.lc-op:disabled{opacity:0.3;cursor:not-allowed}
+.lc-op.danger:hover:not(:disabled){border-color:var(--red);color:var(--red);background:rgba(239,68,68,0.08)}
+.lc-desc{margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:0.75rem 1rem;font-size:0.8rem;color:var(--muted);min-height:48px;transition:all 0.25s}
+.lc-desc strong{color:var(--text)}
+.state-json{background:var(--bg);border-radius:var(--r);padding:0.75rem 1rem;font-family:var(--font-mono);font-size:0.72rem;margin-top:0.75rem;border:1px solid var(--border);transition:all 0.3s;line-height:1.8}
+
+/* ════════════════════════════════════
+   § 8 HOOKS — timeline player
+   ════════════════════════════════════ */
+.hooks-timeline{position:relative;margin:2rem 0 1rem}
+.hooks-rail{height:4px;background:var(--faint);border-radius:2px;position:relative;margin:0 1rem}
+.hooks-progress{position:absolute;inset:0;background:linear-gradient(90deg,var(--green),var(--green2));border-radius:2px;width:0;transition:width 0.5s var(--ease)}
+.hooks-markers{position:relative;display:flex;justify-content:space-between;margin-top:0.5rem;padding:0 1rem}
+.hook-marker{display:flex;flex-direction:column;align-items:center;gap:0.4rem;flex:1}
+.hook-dot{width:14px;height:14px;border-radius:50%;background:var(--faint);border:2px solid var(--faint);transition:all 0.4s var(--ease);cursor:pointer;margin:0 auto}
+.hook-dot.lit{background:var(--green);border-color:var(--green);box-shadow:0 0 10px rgba(0,212,170,0.6)}
+.hook-dot.current-hook{animation:pulse-ring 1s ease infinite}
+.hook-name{font-family:var(--font-mono);font-size:0.62rem;color:var(--muted);text-align:center;transition:color 0.3s;max-width:90px}
+.hook-name.lit{color:var(--green)}
+.hooks-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:1.2rem;min-height:120px;margin-top:1.5rem;transition:all 0.3s}
+.hooks-card h4{font-size:0.85rem;font-weight:700;color:var(--green);margin-bottom:0.35rem}
+.hooks-card .timing{font-family:var(--font-mono);font-size:0.7rem;color:var(--orange);margin-bottom:0.5rem}
+.hooks-card p{font-size:0.8rem;color:var(--muted);line-height:1.7}
+.hooks-ctrl{display:flex;gap:0.75rem;align-items:center;margin-top:1rem}
+.play-btn{width:40px;height:40px;border-radius:50%;background:var(--green);color:#000;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;font-size:1rem;flex-shrink:0;transition:all 0.2s}
+.play-btn:hover{background:var(--green2);transform:scale(1.05)}
+.speed-label{font-family:var(--font-mono);font-size:0.72rem;color:var(--muted)}
+
+/* ════════════════════════════════════
+   § 9 RUNTIMES — race track
+   ════════════════════════════════════ */
+.race-track{display:flex;flex-direction:column;gap:0.75rem;padding:1rem 0}
+.race-lane{display:flex;align-items:center;gap:1rem}
+.lane-label{font-family:var(--font-mono);font-size:0.75rem;font-weight:600;min-width:60px;color:var(--text)}
+.lane-bar-wrap{flex:1;height:36px;background:var(--bg);border-radius:var(--r);position:relative;overflow:hidden;border:1px solid var(--border)}
+.lane-bar{height:100%;border-radius:var(--r);display:flex;align-items:center;padding:0 0.75rem;font-family:var(--font-mono);font-size:0.72rem;font-weight:700;transition:width 1s var(--ease);width:0;white-space:nowrap;overflow:hidden}
+.lane-time{font-family:var(--font-mono);font-size:0.75rem;color:var(--muted);min-width:52px;text-align:right}
+.rocket{position:absolute;top:50%;right:0;transform:translateY(-50%);font-size:1rem;transition:right 1s var(--ease);display:none}
+.race-btn-row{display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap}
+.runtime-chips{display:flex;flex-wrap:wrap;gap:0.5rem;margin-top:0.75rem}
+.runtime-chip{padding:0.3rem 0.75rem;border-radius:var(--r);font-family:var(--font-mono);font-size:0.72rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--muted);transition:all 0.2s}
+.runtime-chip.selected{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.1)}
+.runtime-detail{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:0.75rem 1rem;margin-top:0.75rem;font-size:0.8rem;color:var(--muted);min-height:56px;transition:all 0.25s}
+.runtime-detail strong{color:var(--text)}
+
+/* ── Theory interaction (like §7) ── */
+.theory-controls{display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:1rem}
+.theory-btn{padding:0.45rem 0.9rem;border-radius:var(--r);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all 0.2s;user-select:none}
+.theory-btn:hover{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.08)}
+.theory-btn.active{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.12);box-shadow:0 0 18px rgba(0,212,170,0.18)}
+.theory-card{margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:1.1rem 1.2rem;transition:all 0.25s;min-height:140px}
+.theory-card h4{font-size:0.9rem;font-weight:700;color:var(--green);margin-bottom:0.4rem}
+.theory-card p{font-size:0.84rem;color:var(--muted);line-height:1.75}
+.theory-card .mini{margin-top:0.7rem;background:var(--bg);border-radius:10px;padding:0.75rem 0.85rem;font-family:var(--font-mono);font-size:0.72rem;line-height:1.75;border:1px solid var(--border);color:var(--text)}
+
+/* ── Config interaction (like §7) ── */
+.config-controls{display:flex;flex-wrap:wrap;gap:0.6rem;margin-top:1rem;max-width:68ch}
+.cfg-btn{padding:0.45rem 0.9rem;border-radius:var(--r);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all 0.2s;user-select:none}
+.cfg-btn:hover{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.08)}
+.cfg-btn.active{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.12);box-shadow:0 0 18px rgba(0,212,170,0.18)}
+.cfg-hint{margin-top:0.75rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:0.85rem 1rem;max-width:68ch;color:var(--muted);font-size:0.84rem;line-height:1.75}
+
+/* ── Lab stepper / terminal sim ── */
+.lab-wrap{display:grid;grid-template-columns:0.95fr 1.05fr;gap:clamp(1rem,2.2vw,1.75rem);align-items:stretch}
+@media(max-width:900px){.lab-wrap{grid-template-columns:1fr}}
+.lab-steps{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:1rem 1.1rem}
+.lab-steps-title{font-family:var(--font-mono);font-size:0.72rem;color:var(--green);letter-spacing:0.1em;margin-bottom:0.75rem}
+.lab-step{display:flex;gap:0.85rem;align-items:flex-start;padding:0.75rem 0.7rem;border-radius:14px;border:1px solid transparent;cursor:pointer;transition:all 0.2s var(--ease);user-select:none}
+.lab-step:hover{background:rgba(0,212,170,0.06);border-color:rgba(0,212,170,0.18)}
+.lab-step.active{background:rgba(0,212,170,0.08);border-color:rgba(0,212,170,0.32);box-shadow:0 0 20px rgba(0,212,170,0.12)}
+.lab-dot{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-family:var(--font-mono);font-weight:800;font-size:0.78rem;background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.22);color:var(--green);flex-shrink:0}
+.lab-meta{display:flex;flex-direction:column;gap:0.2rem;min-width:0}
+.lab-name{font-family:var(--font-mono);font-size:0.8rem;font-weight:800;color:var(--text)}
+.lab-sub{font-size:0.84rem;color:var(--muted);line-height:1.55}
+.lab-actions{display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:0.85rem}
+.term{background:linear-gradient(180deg,#070b14, var(--bg));border:1px solid var(--border);border-radius:var(--r2);overflow:hidden;display:flex;flex-direction:column;min-height:440px}
+.term-head{display:flex;align-items:center;justify-content:space-between;padding:0.7rem 0.9rem;background:rgba(255,255,255,0.03);border-bottom:1px solid rgba(0,212,170,0.12)}
+.term-title{font-family:var(--font-mono);font-size:0.72rem;color:var(--muted)}
+.term-dots{display:flex;gap:0.4rem}
+.td{width:10px;height:10px;border-radius:9999px;background:rgba(255,255,255,0.15)}
+.term-body{padding:0.9rem 1rem;font-family:var(--font-mono);font-size:0.78rem;line-height:1.75;color:var(--text);overflow:auto;flex:1}
+.term-line{opacity:0;transform:translateY(6px);transition:opacity 0.25s,var(--ease),transform 0.25s var(--ease)}
+.term-line.show{opacity:1;transform:translateY(0)}
+.prompt{color:var(--green)}
+.dim{color:var(--muted)}
+.ok{color:var(--green)}
+.warnTxt{color:var(--orange)}
+.errTxt{color:var(--red)}
+.fsbox{margin-top:0.75rem;background:rgba(255,255,255,0.03);border:1px solid rgba(0,212,170,0.12);border-radius:14px;padding:0.75rem 0.85rem}
+.tree{font-family:var(--font-mono);font-size:0.78rem;line-height:1.65;color:var(--text)}
+.tree .g{color:var(--green)}
+.tree .m{color:var(--muted)}
+.lab-scroll{max-height:min(72vh,560px);overflow-y:auto;background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:1rem 1.15rem;font-family:var(--font-mono);font-size:0.72rem;line-height:1.85;color:var(--text)}
+.lab-scroll .lab-h{color:var(--orange);margin:1.15rem 0 0.4rem;font-weight:700;font-size:0.76rem;letter-spacing:0.06em}
+.lab-scroll .lab-h:first-child{margin-top:0}
+.lab-scroll pre{margin:0.35rem 0 0;padding:0.65rem 0.75rem;background:rgba(0,0,0,0.25);border:1px solid rgba(0,212,170,0.15);border-radius:10px;white-space:pre-wrap;word-break:break-word;color:var(--text)}
+.lab-scroll p{margin:0.5rem 0 0;color:var(--muted);font-family:var(--font-body);font-size:0.84rem;line-height:1.65}
+
+/* ── Why spec exists: before/after toggle ── */
+.compare-controls{display:flex;gap:0.6rem;flex-wrap:wrap;margin-top:1rem}
+.cmp-btn{padding:0.45rem 0.9rem;border-radius:var(--r);font-family:var(--font-mono);font-size:0.75rem;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all 0.2s;user-select:none}
+.cmp-btn:hover{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.08)}
+.cmp-btn.active{border-color:var(--green);color:var(--green);background:rgba(0,212,170,0.12);box-shadow:0 0 18px rgba(0,212,170,0.18)}
+.cmp-stage{background:var(--bg);border:1px solid rgba(0,212,170,0.14);border-radius:18px;padding:1.1rem 1.1rem 1rem}
+.lane{display:flex;align-items:center;gap:0.75rem;padding:0.65rem 0.7rem;border-radius:14px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.04)}
+.lane+.lane{margin-top:0.6rem}
+.lane-left{min-width:132px;font-family:var(--font-mono);font-size:0.72rem;color:var(--muted)}
+.lane-track{flex:1;position:relative;border-radius:12px;overflow:hidden;border:1px solid rgba(0,212,170,0.12);background:rgba(0,0,0,0.12)}
+.lane-track--body{height:auto;min-height:3.25rem;padding:0.55rem 0.65rem;display:flex;align-items:flex-start}
+.lane-track--mono{font-family:var(--font-mono);font-size:0.68rem;line-height:1.7}
+.swapRow{display:flex;align-items:center;justify-content:space-between;gap:0.75rem;margin-top:0.9rem}
+.swapHint{font-family:var(--font-mono);font-size:0.7rem;color:var(--muted)}
+.swapBtns{display:flex;gap:0.5rem;flex-wrap:wrap}
+.miniBtn{padding:0.35rem 0.6rem;border-radius:10px;font-family:var(--font-mono);font-size:0.68rem;cursor:pointer;border:1px solid rgba(0,212,170,0.18);background:rgba(255,255,255,0.03);color:var(--text);transition:all 0.2s}
+.miniBtn:hover{border-color:rgba(0,212,170,0.5);color:var(--green);background:rgba(0,212,170,0.08)}
+.cmp-note{margin-top:0.85rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:1rem 1.15rem;color:var(--muted);font-size:0.84rem;line-height:1.7}
+
+/* ── Namespace compare board ── */
+.ns-compare{display:grid;grid-template-columns:1fr 1fr;gap:0.85rem}
+@media(max-width:700px){.ns-compare{grid-template-columns:1fr}}
+.ns-col{background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:0.85rem 1rem}
+.ns-col h5{font-family:var(--font-mono);font-size:0.68rem;letter-spacing:0.08em;margin-bottom:0.5rem}
+.ns-col.host h5{color:var(--blue)}
+.ns-col.cont h5{color:var(--green)}
+.ns-items{display:grid;gap:0.45rem}
+.ns-item{display:flex;justify-content:space-between;gap:0.6rem;align-items:center;padding:0.42rem 0.55rem;border-radius:10px;font-family:var(--font-mono);font-size:0.72rem;border:1px solid rgba(255,255,255,0.06);transition:all 0.22s var(--ease)}
+.ns-item .k{color:var(--muted)}
+.ns-item .v{color:var(--text)}
+.ns-item.host-on{background:rgba(96,165,250,0.08);border-color:rgba(96,165,250,0.2)}
+.ns-item.cont-on{background:rgba(0,212,170,0.08);border-color:rgba(0,212,170,0.22)}
+.ns-item.faded{opacity:0.38;filter:grayscale(0.25)}
+.ns-item.focus{box-shadow:0 0 18px rgba(0,212,170,0.22);transform:translateX(3px)}
+
+/* ── Utility ── */
+.mt1{margin-top:0.5rem}.mt2{margin-top:1rem}.mt3{margin-top:1.5rem}
+.flex-row{display:flex;gap:0.75rem;flex-wrap:wrap;align-items:center}
+.code{font-family:var(--font-mono);background:var(--bg3);border-radius:4px;padding:0 5px;font-size:0.85em;color:var(--green)}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <div class="nav-logo">⬡ OCI Runtime Spec</div>
+  <a class="nav-link" href="#start">概覽（三個規範）</a>
+  <a class="nav-link" href="#why">為何需要 Runtime Spec</a>
+  <a class="nav-link" href="#what">Runtime Spec 規範什麼</a>
+  <a class="nav-link" href="#bundle">Bundle</a>
+  <a class="nav-link" href="#config">config.json</a>
+  <a class="nav-link" href="#namespaces">Namespaces</a>
+  <a class="nav-link" href="#cgroups">cgroups</a>
+  <a class="nav-link" href="#seccomp">Seccomp</a>
+  <a class="nav-link" href="#lifecycle">生命週期</a>
+  <a class="nav-link" href="#hooks">Hooks</a>
+  <a class="nav-link" href="#runtimes">Runtime 比較</a>
+  <a class="nav-link" href="#runc-lab">runc 實戰</a>
+</nav>
+
+<!-- ══════════════════════════════════════════
+     §0 START — from zero
+     ══════════════════════════════════════════ -->
+<section class="section" id="start" style="background:linear-gradient(180deg,var(--bg),var(--bg2))">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 00 — 先把全局放對</div>
+      <h2 class="section-title">OCI 有<span>三個規範</span>，本篇聚焦<span>Runtime Spec</span></h2>
+      <p class="section-desc">OCI（Open Container Initiative）把「容器」拆成三段標準化：<span class="code">Distribution</span>（怎麼傳）、<span class="code">Image</span>（怎麼存/長什麼樣）、<span class="code">Runtime</span>（怎麼跑）。</p>
+      <p class="section-desc mt2">這篇教學只做一件事：把 <strong style="color:var(--green)">OCI Runtime Spec</strong> 從抽象文字變成你能操作的流程，最後用 <span class="code">runc</span> 從 0 跑起一個最小容器。</p>
+      <div class="flex-row mt3">
+        <span class="tag tag-green">理論 → 實作</span>
+        <span class="tag tag-blue">以 Linux 為主</span>
+        <span class="tag tag-orange">runc hands-on</span>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// OCI 三大規範鏈路（本篇：Runtime）</div>
+      <div class="spec-chain" id="spec-chain">
+        <div class="spec-node" id="sn1">
+          <div class="icon">📦</div>
+          <div class="name">Distribution Spec</div>
+          <div class="sub">映像傳輸協定<br>Registry API</div>
+        </div>
+        <div class="spec-arrow" id="sa1"></div>
+        <div class="spec-node" id="sn2">
+          <div class="icon">🖼️</div>
+          <div class="name">Image Spec</div>
+          <div class="sub">映像格式定義<br>Layers / Manifest</div>
+        </div>
+        <div class="spec-arrow" id="sa2"></div>
+        <div class="spec-node active-node" id="sn3">
+          <div class="icon">⚙️</div>
+          <div class="name">Runtime Spec</div>
+          <div class="sub">執行環境標準<br>← 本教學主題</div>
+        </div>
+      </div>
+      <div style="margin-top:1.25rem;background:var(--bg);border-radius:var(--r);padding:1rem;font-family:var(--font-mono);font-size:0.72rem;line-height:1.9;border:1px solid var(--border)">
+        <span style="color:var(--muted)">// 標準實作：</span><br>
+        <span style="color:var(--green)">runc</span> → OCI Runtime 參考實作 (Go)<br>
+        <span style="color:var(--blue)">containerd</span> → 呼叫 runc 的上層容器管理<br>
+        <span style="color:var(--orange)">Kubernetes</span> → 透過 CRI 介面呼叫 containerd
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §0.5 WHY — why it exists
+     ══════════════════════════════════════════ -->
+<section class="section" id="why" style="background:var(--bg2)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 00.5 — 為何存在？</div>
+      <h2 class="section-title">Runtime Spec 解決的是<span>相容性</span>與<span>可替換性</span></h2>
+      <p class="section-desc">這段不要靠背文字，直接看「有沒有 spec」差在哪裡。點下面切換，你會看到：<strong style="color:var(--green)">上層工具是否能用同一種方式驅動不同 runtime</strong>。</p>
+      <div class="compare-controls">
+        <button class="cmp-btn" data-cmp="nospec">沒有 Runtime Spec</button>
+        <button class="cmp-btn" data-cmp="spec">有 OCI Runtime Spec</button>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// 切換對照：相容性 & 可替換性</div>
+      <div class="cmp-stage" id="cmp-stage">
+        <div class="lane">
+          <div class="lane-left">containerd 設定</div>
+          <div class="lane-track lane-track--body lane-track--mono">
+            <div id="cmp-config" style="color:var(--muted)"></div>
+          </div>
+        </div>
+        <div class="lane">
+          <div class="lane-left">呼叫 runtime</div>
+          <div class="lane-track lane-track--body lane-track--mono">
+            <div id="cmp-contract"></div>
+          </div>
+        </div>
+
+        <div class="swapRow">
+          <div class="swapHint" id="cmp-hint">提示：沒有 spec 時，換 runtime 等於要改 containerd 對應設定。</div>
+          <div class="swapBtns">
+            <button class="miniBtn" onclick="cmpSwapRuntime('runc')">runtime = runc</button>
+            <button class="miniBtn" onclick="cmpSwapRuntime('crun')">runtime = crun</button>
+            <button class="miniBtn" onclick="cmpSwapRuntime('kata')">runtime = kata</button>
+          </div>
+        </div>
+        <div class="cmp-note" id="cmp-note"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §0.75 WHAT — what runtime spec defines
+     ══════════════════════════════════════════ -->
+<section class="section" id="what" style="background:var(--bg)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 00.75 — Runtime Spec 在規範什麼？</div>
+      <h2 class="section-title">三個核心：<span>Bundle</span>、<span>State</span>、<span>Lifecycle</span></h2>
+      <p class="section-desc">你只要記住：runtime 吃的是 <span class="code">bundle</span>，吐出的是可觀測的 <span class="code">state</span>，並且遵守一組可操作的 <span class="code">lifecycle</span>。點按鈕看對應即可。</p>
+      <div class="theory-controls" aria-label="theory controls">
+        <button class="theory-btn" data-theory="bundle">Bundle</button>
+        <button class="theory-btn" data-theory="state">State</button>
+        <button class="theory-btn" data-theory="lifecycle">Lifecycle</button>
+        <button class="theory-btn" data-theory="process">process</button>
+        <button class="theory-btn" data-theory="mounts">mounts</button>
+        <button class="theory-btn" data-theory="namespaces">namespaces</button>
+        <button class="theory-btn" data-theory="cgroups">cgroups</button>
+        <button class="theory-btn" data-theory="seccomp">seccomp</button>
+        <button class="theory-btn" data-theory="hooks">hooks</button>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// 先有 bundle，才談 runtime</div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:1.25rem;font-family:var(--font-mono);font-size:0.74rem;line-height:1.9;color:var(--text)">
+        <span style="color:var(--muted)">// 上層工具（containerd/CRI-O）做的：</span><br>
+        ① unpack image → 組成 rootfs<br>
+        ② 生成 config.json → 組成 bundle<br><br>
+        <span style="color:var(--muted)">// runtime（runc/crun）做的：</span><br>
+        ③ 依 config 建立 namespace / cgroups / mounts / seccomp<br>
+        ④ 啟動 process 並維護狀態 + hooks
+      </div>
+      <div style="margin-top:1rem;background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:1rem;color:var(--muted);font-size:0.84rem;line-height:1.75">
+        讀到這裡你只要抓住：<strong style="color:var(--text)">OCI Runtime 的輸入是 bundle，輸出是「一個被隔離與限制的程序」</strong>。
+      </div>
+      <div class="theory-card" id="theory-detail">
+        <h4>← 點一個概念</h4>
+        <p>用按鈕切換：每個概念都會給你「它在解決什麼」以及「在 runc / config.json 對應到哪裡」。</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §2 BUNDLE
+     ══════════════════════════════════════════ -->
+<section class="section" id="bundle" style="background:var(--bg2)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 02 — Filesystem Bundle</div>
+      <h2 class="section-title">從 0 做出你的<span>第一個 Bundle</span></h2>
+      <p class="section-desc">一個 bundle = <span class="code">rootfs/</span> + <span class="code">config.json</span>。按播放，看它怎麼被「組裝」出來。</p>
+      <div class="mt3">
+        <button class="btn btn-primary btn-sm" onclick="animateBundle()">▶ 以 layer/manifest 生成 bundle</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetBundle()" style="margin-left:0.5rem">↺ 重置</button>
+      </div>
+      <div class="mt2" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r2);padding:0.85rem 1rem;max-width:60ch">
+        <div style="font-family:var(--font-mono);font-size:0.72rem;color:var(--green);letter-spacing:0.1em;margin-bottom:0.35rem">對應到 runc 指令</div>
+        <div style="font-family:var(--font-mono);font-size:0.74rem;line-height:1.85;color:var(--text)">
+          <span style="color:var(--muted)">$</span> mkdir -p bundle/rootfs<br>
+          <span style="color:var(--muted)">$</span> (準備 rootfs)<br>
+          <span style="color:var(--muted)">$</span> cd bundle && runc spec
+        </div>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// Bundle 結構示意</div>
+      <div class="bundle-stage">
+        <div style="display:flex;flex-direction:column;gap:0.6rem" id="bundle-sources">
+          <div class="file-item" id="bi1"><span class="fi">🐧</span> Layer 1: base OS</div>
+          <div class="file-item" id="bi2"><span class="fi">📚</span> Layer 2: libs</div>
+          <div class="file-item" id="bi3"><span class="fi">🚀</span> Layer 3: app</div>
+          <div class="file-item" id="bi4" style="border-color:rgba(249,115,22,0.3);color:var(--orange)"><span class="fi">⚙️</span> image manifest</div>
+        </div>
+        <div style="font-size:1.5rem;color:var(--green);opacity:0" id="bundle-arrow">→</div>
+        <div class="bundle-box" id="bundle-box">
+          <div class="bundle-label">📁 /bundle/</div>
+          <div class="bundle-files">
+            <div class="bundle-file" id="bf1" style="border-left:3px solid rgba(0,212,170,0.5)"><span>📂</span> rootfs/</div>
+            <div class="bundle-file" id="bf2" style="border-left:3px solid rgba(249,115,22,0.5);color:var(--orange)"><span>📄</span> config.json</div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;font-family:var(--font-mono);font-size:0.72rem;color:var(--muted);line-height:1.8">
+        <span style="color:var(--green)">$</span> runc run mycontainer<br>
+        <span style="color:var(--muted)">  --bundle /path/to/bundle</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §3 CONFIG.JSON
+     ══════════════════════════════════════════ -->
+<section class="section" id="config" style="background:var(--bg)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 03 — config.json</div>
+      <h2 class="section-title">讀懂 <span>runc spec</span> 產生的 config.json</h2>
+      <p class="section-desc">點下面按鈕或左側欄位，看「最常卡住」的設定會怎麼影響容器。</p>
+      <div class="config-controls" aria-label="config quick topics">
+        <button class="cfg-btn" data-cfg="process-args">process.args</button>
+        <button class="cfg-btn" data-cfg="process-user">process.user</button>
+        <button class="cfg-btn" data-cfg="mounts-proc">mounts:/proc</button>
+        <button class="cfg-btn" data-cfg="linux-ns">linux.namespaces</button>
+        <button class="cfg-btn" data-cfg="linux-cgroups">linux.resources</button>
+        <button class="cfg-btn" data-cfg="linux-seccomp">linux.seccomp</button>
+      </div>
+      <div class="cfg-hint">
+        這排按鈕是「最常卡住的點」捷徑：點了就會告訴你它在幹嘛、為何重要，以及在 <span class="code">runc</span> 實戰會怎麼遇到它。
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// 點擊欄位查看說明</div>
+      <div class="config-layout">
+        <div class="json-panel" id="json-panel">
+<span style="color:var(--muted)">{</span><br>
+&nbsp;&nbsp;<span class="json-key" data-key="ociVersion">"ociVersion"</span>: <span class="json-str">"1.1.0"</span>,<br>
+&nbsp;&nbsp;<span class="json-key" data-key="process">"process"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"terminal": </span><span class="json-bool">false</span>,<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"user": {"uid": 0},</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"args": ["nginx"],</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"env": [...],</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"capabilities": {...}</span><br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;<span class="json-key" data-key="root">"root"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"path": "rootfs",</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"readonly": </span><span class="json-bool">false</span><br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;<span class="json-key" data-key="mounts">"mounts"</span>: [<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">{type:"proc", ...},</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">{type:"bind", ...}</span><br>
+&nbsp;&nbsp;],<br>
+&nbsp;&nbsp;<span class="json-key" data-key="hostname">"hostname"</span>: <span class="json-str">"mycontainer"</span>,<br>
+&nbsp;&nbsp;<span class="json-key" data-key="linux">"linux"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"namespaces": [...],</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"resources": {...},</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"seccomp": {...}</span><br>
+&nbsp;&nbsp;}<br>
+<span style="color:var(--muted)">}</span>
+        </div>
+        <div class="config-detail" id="config-detail">
+          <h4>← 點擊左側欄位</h4>
+          <p>選擇 JSON 中的任意頂層欄位，查看詳細說明。</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §4 NAMESPACES
+     ══════════════════════════════════════════ -->
+<section class="section" id="namespaces" style="background:var(--bg2)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 04 — Linux Namespaces</div>
+      <h2 class="section-title">看見「主機視角」與<span>容器視角</span>的差異</h2>
+      <p class="section-desc">點一個 namespace。左側 Host 欄位會被「遮蔽」對應資源，右側 Container 欄位會高亮該資源，直接看到隔離效果，不再只是名詞。</p>
+      <div class="ns-grid">
+        <button class="syscall-btn" onclick="selectNs('pid')">PID</button>
+        <button class="syscall-btn" onclick="selectNs('net')">NET</button>
+        <button class="syscall-btn" onclick="selectNs('mnt')">MNT</button>
+        <button class="syscall-btn" onclick="selectNs('ipc')">IPC</button>
+        <button class="syscall-btn" onclick="selectNs('uts')">UTS</button>
+        <button class="syscall-btn" onclick="selectNs('user')">USER</button>
+        <button class="syscall-btn" onclick="selectNs('cgroup')">CGROUP</button>
+        <button class="syscall-btn" onclick="selectNs('time')">TIME</button>
+      </div>
+      <div class="ns-info-box mt2" id="ns-info-box">
+        <span style="color:var(--muted)">← 點擊任一 namespace 類型查看說明</span>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// Host vs Container 可見性</div>
+      <div class="ns-compare">
+        <div class="ns-col host">
+          <h5>Host 可見</h5>
+          <div class="ns-items" id="ns-host-items">
+            <div class="ns-item host-on" data-type="pid"><span class="k">PID</span><span class="v">all host processes</span></div>
+            <div class="ns-item host-on" data-type="net"><span class="k">NET</span><span class="v">host eth0 / routes</span></div>
+            <div class="ns-item host-on" data-type="mnt"><span class="k">MNT</span><span class="v">host mount table</span></div>
+            <div class="ns-item host-on" data-type="ipc"><span class="k">IPC</span><span class="v">shared IPC objects</span></div>
+            <div class="ns-item host-on" data-type="uts"><span class="k">UTS</span><span class="v">host hostname</span></div>
+            <div class="ns-item host-on" data-type="user"><span class="k">USER</span><span class="v">host UID/GID map</span></div>
+            <div class="ns-item host-on" data-type="cgroup"><span class="k">CGROUP</span><span class="v">full cgroup tree</span></div>
+            <div class="ns-item host-on" data-type="time"><span class="k">TIME</span><span class="v">host clocks</span></div>
+          </div>
+        </div>
+        <div class="ns-col cont">
+          <h5>Container 可見</h5>
+          <div class="ns-items" id="ns-cont-items">
+            <div class="ns-item cont-on" data-type="pid"><span class="k">PID</span><span class="v">PID 1</span></div>
+            <div class="ns-item cont-on" data-type="net"><span class="k">NET</span><span class="v">eth0 (veth)</span></div>
+            <div class="ns-item cont-on" data-type="mnt"><span class="k">MNT</span><span class="v">container mount view</span></div>
+            <div class="ns-item cont-on" data-type="ipc"><span class="k">IPC</span><span class="v">private IPC</span></div>
+            <div class="ns-item cont-on" data-type="uts"><span class="k">UTS</span><span class="v">container hostname</span></div>
+            <div class="ns-item cont-on" data-type="user"><span class="k">USER</span><span class="v">UID map (0→1000)</span></div>
+            <div class="ns-item cont-on" data-type="cgroup"><span class="k">CGROUP</span><span class="v">own cgroup path</span></div>
+            <div class="ns-item cont-on" data-type="time"><span class="k">TIME</span><span class="v">container clocks</span></div>
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:0.75rem;background:var(--bg);border-radius:var(--r);padding:0.75rem;font-family:var(--font-mono);font-size:0.72rem;border:1px solid var(--border);line-height:1.8" id="ns-json">
+<span style="color:var(--muted)">"linux": {</span><br>
+&nbsp;&nbsp;<span style="color:var(--muted)">"namespaces": [</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--green)">// 點擊上方選項填入</span><br>
+&nbsp;&nbsp;<span style="color:var(--muted)">]</span><br>
+<span style="color:var(--muted)">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §5 CGROUPS
+     ══════════════════════════════════════════ -->
+<section class="section" id="cgroups" style="background:var(--bg)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 05 — cgroups 資源限制</div>
+      <h2 class="section-title">資源的<span>水桶模型</span></h2>
+      <p class="section-desc">Control Groups（cgroups）限制容器能使用的 CPU、Memory、I/O 等資源。想像每種資源是一個有容量上限的水桶，程序只能用桶內的量。</p>
+      <p class="section-desc mt2">超過警戒線（80%）系統發出警告，超過上限容器行程會被強制終止（OOM Kill）。</p>
+      <p class="section-desc mt2" style="font-size:0.82rem;color:var(--muted)">拖動滑桿來調整資源使用量，觀察水桶反應。</p>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// 資源使用量模擬</div>
+      <div class="cgroup-layout">
+        <div class="bucket" id="bucket-mem">
+          <div class="bucket-label">💾 Memory</div>
+          <div class="bucket-wrap" id="bw-mem"><div class="overflow-drop">💧</div><div class="bucket-fill" id="bf-mem" style="height:30%"></div></div>
+          <div class="bucket-pct" id="bp-mem">30%</div>
+          <input type="range" min="0" max="100" value="30" oninput="updateBucket('mem',this.value)">
+          <div style="font-size:0.7rem;color:var(--muted);text-align:center;font-family:var(--font-mono)">limit: 512Mi</div>
+        </div>
+        <div class="bucket" id="bucket-cpu">
+          <div class="bucket-label">⚡ CPU</div>
+          <div class="bucket-wrap" id="bw-cpu"><div class="overflow-drop">🔥</div><div class="bucket-fill" id="bf-cpu" style="height:55%"></div></div>
+          <div class="bucket-pct" id="bp-cpu">55%</div>
+          <input type="range" min="0" max="100" value="55" oninput="updateBucket('cpu',this.value)">
+          <div style="font-size:0.7rem;color:var(--muted);text-align:center;font-family:var(--font-mono)">limit: 0.5 core</div>
+        </div>
+        <div class="bucket" id="bucket-io">
+          <div class="bucket-label">💿 I/O</div>
+          <div class="bucket-wrap" id="bw-io"><div class="overflow-drop">⚡</div><div class="bucket-fill" id="bf-io" style="height:15%"></div></div>
+          <div class="bucket-pct" id="bp-io">15%</div>
+          <input type="range" min="0" max="100" value="15" oninput="updateBucket('io',this.value)">
+          <div style="font-size:0.7rem;color:var(--muted);text-align:center;font-family:var(--font-mono)">limit: 100MB/s</div>
+        </div>
+      </div>
+      <div class="cgroup-json" id="cgroup-json">
+<span style="color:var(--muted)">"resources": {</span><br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"memory"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"limit": </span><span id="cj-mem" style="color:var(--green)">157286400</span><span style="color:var(--muted)"> // ~150Mi</span><br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"cpu"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"quota": </span><span id="cj-cpu" style="color:var(--yellow)">27500</span><span style="color:var(--muted)">, "period": 100000</span><br>
+&nbsp;&nbsp;},<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"blockIO"</span>: {<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"weight": </span><span id="cj-io" style="color:var(--orange)">75</span><br>
+&nbsp;&nbsp;}<br>
+<span style="color:var(--muted)">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §6 SECCOMP
+     ══════════════════════════════════════════ -->
+<section class="section" id="seccomp" style="background:var(--bg2)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 06 — Seccomp & Capabilities</div>
+      <h2 class="section-title">系統呼叫<span>過濾牆</span></h2>
+      <p class="section-desc">Seccomp（Secure Computing Mode）在容器的 App 與 Linux Kernel 之間建立一道過濾牆，只允許白名單內的系統呼叫通過，其餘一律拒絕。</p>
+      <p class="section-desc mt2">Capabilities 則更細緻地控制 root 的特定特權，例如允許 <span class="code">CAP_NET_BIND_SERVICE</span> 但拒絕 <span class="code">CAP_SYS_ADMIN</span>。</p>
+      <div class="sec-controls">
+        <button class="syscall-btn allow-mode" onclick="fireSyscall('read','allow')">read()</button>
+        <button class="syscall-btn allow-mode" onclick="fireSyscall('write','allow')">write()</button>
+        <button class="syscall-btn allow-mode" onclick="fireSyscall('open','allow')">open()</button>
+        <button class="syscall-btn deny-mode" onclick="fireSyscall('ptrace','deny')">ptrace()</button>
+        <button class="syscall-btn deny-mode" onclick="fireSyscall('reboot','deny')">reboot()</button>
+        <button class="syscall-btn deny-mode" onclick="fireSyscall('mount','deny')">mount()</button>
+      </div>
+      <div class="sec-log" id="sec-log">
+        <div style="color:var(--muted);font-size:0.68rem">// syscall 執行記錄</div>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// Seccomp 過濾示意</div>
+      <div class="seccomp-stage" id="seccomp-stage">
+        <div class="sec-zone">
+          <div class="icon">📱</div>
+          <div class="lbl">Container<br>App</div>
+        </div>
+        <div style="flex:1;position:relative;height:100%">
+          <div id="packet-el" class="packet" style="display:none"></div>
+          <div id="explode-el" class="explode">💥</div>
+        </div>
+        <div class="sec-wall">
+          <div class="wall-brick"></div>
+          <div class="wall-brick"></div>
+          <div class="wall-brick"></div>
+          <div class="wall-brick"></div>
+          <div class="wall-brick"></div>
+          <div class="wlbl">Seccomp<br>Filter</div>
+        </div>
+        <div style="flex:1;position:relative;height:100%">
+          <div id="packet2-el" class="packet" style="display:none"></div>
+        </div>
+        <div class="sec-zone">
+          <div class="icon">🐧</div>
+          <div class="lbl">Linux<br>Kernel</div>
+        </div>
+      </div>
+      <div style="margin-top:1rem;background:var(--bg);border-radius:var(--r);padding:0.75rem 1rem;font-family:var(--font-mono);font-size:0.72rem;border:1px solid var(--border);line-height:1.8">
+<span style="color:var(--muted)">"seccomp": {</span><br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"defaultAction"</span>: <span style="color:var(--red)">"SCMP_ACT_ERRNO"</span>,<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"syscalls"</span>: [{<br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--muted)">"names": [</span><span style="color:var(--green)">"read","write","open"</span><span style="color:var(--muted)">...],</span><br>
+&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--blue)">"action"</span>: <span style="color:var(--green)">"SCMP_ACT_ALLOW"</span><br>
+&nbsp;&nbsp;}]<br>
+<span style="color:var(--muted)">}</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §7 LIFECYCLE
+     ══════════════════════════════════════════ -->
+<section class="section" id="lifecycle" style="background:var(--bg)">
+  <div class="section-inner wide">
+    <div>
+      <div class="section-label">§ 07 — 容器生命週期</div>
+      <h2 class="section-title">從 <span>creating</span> 到 <span>stopped</span></h2>
+      <p class="section-desc">這裡是 Runtime Spec 最「可操作」的一塊：它把容器抽象成一個狀態機（creating/created/running/stopped），並規範一組標準操作。你在這裡按的每個按鈕，都能在 §10 直接用對應的 <span class="code">runc</span> 指令做出一樣的效果。</p>
+    </div>
+    <div style="margin-top:2rem">
+      <div class="lifecycle-track">
+        <div class="lc-nodes">
+          <div class="lc-node">
+            <div class="lc-dot" id="lcd-creating">🔨</div>
+            <div class="lc-label" id="lcl-creating">creating</div>
+          </div>
+          <div class="lc-line"><div class="lc-line-fill" id="ll1"></div></div>
+          <div class="lc-node">
+            <div class="lc-dot" id="lcd-created">📦</div>
+            <div class="lc-label" id="lcl-created">created</div>
+          </div>
+          <div class="lc-line"><div class="lc-line-fill" id="ll2"></div></div>
+          <div class="lc-node">
+            <div class="lc-dot" id="lcd-running">▶️</div>
+            <div class="lc-label" id="lcl-running">running</div>
+          </div>
+          <div class="lc-line"><div class="lc-line-fill" id="ll3"></div></div>
+          <div class="lc-node">
+            <div class="lc-dot" id="lcd-stopped">⏹️</div>
+            <div class="lc-label" id="lcl-stopped">stopped</div>
+          </div>
+        </div>
+      </div>
+      <div class="lc-ops">
+        <button class="lc-op" id="op-create" onclick="lcOp('create')">create</button>
+        <button class="lc-op" id="op-start" onclick="lcOp('start')" disabled>start</button>
+        <button class="lc-op danger" id="op-kill" onclick="lcOp('kill')" disabled>kill</button>
+        <button class="lc-op danger" id="op-delete" onclick="lcOp('delete')" disabled>delete</button>
+        <button class="lc-op" id="op-reset" onclick="lcOp('reset')" style="margin-left:1rem;border-color:var(--faint)">↺ 重置</button>
+      </div>
+      <div style="margin-top:0.75rem;background:var(--bg);border:1px solid var(--border);border-radius:var(--r2);padding:0.85rem 1rem;font-family:var(--font-mono);font-size:0.74rem;line-height:1.85;color:var(--text)">
+        <span style="color:var(--muted)">// runc 對照（同一個 lifecycle）</span><br>
+        <span style="color:var(--muted)">$</span> sudo runc create myct &nbsp;&nbsp;<span style="color:var(--muted)"># initial → created（建立隔離環境，程序未啟動）</span><br>
+        <span style="color:var(--muted)">$</span> sudo runc start myct &nbsp;&nbsp;<span style="color:var(--muted)"># created → running</span><br>
+        <span style="color:var(--muted)">$</span> sudo runc kill myct TERM &nbsp;&nbsp;<span style="color:var(--muted)"># running → stopped</span><br>
+        <span style="color:var(--muted)">$</span> sudo runc delete myct &nbsp;&nbsp;<span style="color:var(--muted)"># stopped → (removed)</span>
+      </div>
+      <div class="lc-desc" id="lc-desc">
+        <strong>初始狀態</strong> — 點擊 <code style="font-family:var(--font-mono);background:var(--bg);padding:0 4px;border-radius:3px">create</code> 開始建立容器
+      </div>
+      <div class="state-json" id="state-json">
+<span style="color:var(--muted)">// runc state mycontainer</span><br>
+{<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"ociVersion"</span>: <span style="color:var(--green)">"1.1.0"</span>,<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"id"</span>: <span style="color:var(--green)">"mycontainer"</span>,<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"status"</span>: <span style="color:var(--yellow)" id="sj-status">"–"</span>,<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"pid"</span>: <span style="color:var(--orange)" id="sj-pid">0</span>,<br>
+&nbsp;&nbsp;<span style="color:var(--blue)">"bundle"</span>: <span style="color:var(--green)">"/var/run/bundle"</span><br>
+}
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §8 HOOKS
+     ══════════════════════════════════════════ -->
+<section class="section" id="hooks" style="background:var(--bg2)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 08 — Hooks 系統</div>
+      <h2 class="section-title">生命週期的<span>插入點</span></h2>
+      <p class="section-desc">Hooks 讓使用者在容器生命週期的特定時間點插入自訂程式。六種 Hook 依序在不同階段觸發，可用於網路設定、日誌收集、清理資源等任務。</p>
+      <p class="section-desc mt2">點擊播放鍵，觀察各 Hook 依序被觸發的時序。</p>
+      <div class="hooks-ctrl">
+        <button class="play-btn" id="hooks-play-btn" onclick="playHooks()">▶</button>
+        <span class="speed-label">按播放按鈕模擬容器啟動流程</span>
+      </div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// Hook 觸發時序</div>
+      <div class="hooks-timeline">
+        <div class="hooks-rail"><div class="hooks-progress" id="hooks-progress"></div></div>
+        <div class="hooks-markers" id="hooks-markers"></div>
+      </div>
+      <div class="hooks-card" id="hooks-card">
+        <div style="color:var(--muted);font-size:0.82rem">點擊播放按鈕開始模擬</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §9 RUNTIMES
+     ══════════════════════════════════════════ -->
+<section class="section" id="runtimes" style="background:var(--bg)">
+  <div class="section-inner">
+    <div>
+      <div class="section-label">§ 09 — Runtime 實作比較</div>
+      <h2 class="section-title">五大<span>Runtime</span> 賽跑</h2>
+      <p class="section-desc">符合 OCI Runtime Spec 的實作有多種，各有不同的架構設計與效能特性。點擊 Runtime 名稱查看詳細說明，或按「開始賽跑」比較啟動速度。</p>
+      <div class="runtime-chips" id="runtime-chips">
+        <div class="runtime-chip" onclick="selectRuntime('runc')">runc</div>
+        <div class="runtime-chip" onclick="selectRuntime('crun')">crun</div>
+        <div class="runtime-chip" onclick="selectRuntime('youki')">youki</div>
+        <div class="runtime-chip" onclick="selectRuntime('gvisor')">gVisor</div>
+        <div class="runtime-chip" onclick="selectRuntime('kata')">Kata</div>
+      </div>
+      <div class="runtime-detail" id="runtime-detail">點擊上方 Runtime 名稱查看詳細說明</div>
+    </div>
+    <div class="viz">
+      <div class="viz-title">// 容器啟動延遲比較（相對值）</div>
+      <div class="race-track" id="race-track"></div>
+      <div class="race-btn-row">
+        <button class="btn btn-primary btn-sm" onclick="startRace()">🏁 開始賽跑</button>
+        <button class="btn btn-ghost btn-sm" onclick="resetRace()">↺ 重置</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════
+     §10 RUNC LAB — hands-on
+     ══════════════════════════════════════════ -->
+<section class="section" id="runc-lab" style="background:var(--bg2)">
+  <div class="section-inner wide">
+    <div>
+      <div class="section-label">§ 10 — runc 實戰（Ubuntu 完整流程）</div>
+      <h2 class="section-title">與教材同級的 <span>bundle + runc run</span> 實作</h2>
+      <p class="section-desc">下面兩塊並行：<strong style="color:var(--green)">可捲動的完整指令</strong>（在真機 Ubuntu 上照抄即可）與 <strong style="color:var(--green)">左側步驟 + 右側終端模擬</strong>（對照意義）。流程對齊常見教學：準備 rootfs → <span class="code">runc spec</span> 編修 → <span class="code">sudo runc run bb8</span> → 在 shell 裡驗證隔離與 <span class="code">/proc</span> 行為。</p>
+    </div>
+
+    <div class="viz mt3">
+      <div class="viz-title">// 完整手動流程（Ubuntu 22.04 / 24.04，於宿主機終端機執行）</div>
+      <div class="lab-scroll">
+        <div class="lab-h">0 — 安裝依賴</div>
+        <p>需要 root。若用 Docker 匯出 rootfs，請裝 Docker；若不用 Docker，可改走「方案 B」Alpine tarball。</p>
+        <pre>sudo apt update
+sudo apt install -y runc curl jq nano ca-certificates iproute2</pre>
+        <pre># 選用：從 Docker 映像匯出 rootfs（與多數教學相同）
+sudo apt install -y docker.io
+sudo systemctl enable --now docker</pre>
+
+        <div class="lab-h">1 — 建立 OCI bundle 目錄</div>
+        <pre>mkdir -p ~/oci-bb8/rootfs
+cd ~/oci-bb8</pre>
+
+        <div class="lab-h">2 — 填入 rootfs（擇一）</div>
+        <p><strong style="color:var(--text)">方案 A（BusyBox，需 Docker）</strong> — 與截圖中 <span class="code">/bin → busybox</span> 行為一致。</p>
+        <pre>sudo docker create --name bb-export busybox:latest sh
+sudo docker export bb-export | sudo tar -C rootfs -xf -
+sudo docker rm bb-export
+test -x rootfs/bin/sh && echo "OK: rootfs/bin/sh"</pre>
+        <p><strong style="color:var(--text)">方案 B（Alpine minirootfs，免 Docker）</strong> — 類似你另一張圖：下載官方 minirootfs 再解到 <span class="code">rootfs/</span>。請到 <a href="https://dl-cdn.alpinelinux.org/alpine/" target="_blank" rel="noopener">Alpine 發行目錄</a> 換成目前穩定版連結。</p>
+        <pre>curl -fsSL -o alpine.tar.gz "https://dl-cdn.alpinelinux.org/alpine/v3.19/releases/x86_64/alpine-minirootfs-3.19.3-x86_64.tar.gz"
+sudo tar xzf alpine.tar.gz -C rootfs
+rm -f alpine.tar.gz
+test -x rootfs/bin/sh && echo "OK: rootfs/bin/sh"</pre>
+        <p><strong style="color:var(--text)">方案 C（极小 Ubuntu rootfs，較大下載）</strong></p>
+        <pre>sudo apt install -y debootstrap
+sudo debootstrap jammy rootfs http://archive.ubuntu.com/ubuntu/</pre>
+
+        <div class="lab-h">3 — 將 rootfs 擁有者改為 root（runc 常要求·與教學說明一致）</div>
+        <p>若你是用一般使用者下載解壓，目錄可能是 <span class="code">ubuntu:ubuntu</span>；建議整個 bundle 交給 root。</p>
+        <pre>sudo chown -R root:root ~/oci-bb8</pre>
+
+        <div class="lab-h">4 — 產生並編輯 OCI <span class="code">config.json</span></div>
+        <p>對齊教學範例：hostname <span class="code">dagger</span>、互動 shell、<span class="code">args: ["sh"]</span>、root 指向 <span class="code">rootfs</span>。<span class="code">runc spec</span> 會帶入預設 namespaces 與 <span class="code">/proc</span> 掛載。</p>
+        <pre>cd ~/oci-bb8
+sudo runc spec</pre>
+        <p>用 <span class="code">nano</span> 手改，或一次性用 <span class="code">jq</span>（擇一）：</p>
+        <pre>sudo nano config.json</pre>
+        <pre>sudo cp config.json config.json.bak
+sudo jq '.hostname = "dagger"
+  | .process.terminal = true
+  | .process.args = ["sh"]
+  | .process.user = {"uid": 0, "gid": 0}
+  | .root = (.root // {}) | .root.path = "rootfs" | .root.readonly = false' config.json.bak > config.json</pre>
+
+        <div class="lab-h">5 — 以互動方式啟動容器（對齊 <span class="code">runc run bb8</span>）</div>
+        <pre>cd ~/oci-bb8
+sudo runc run bb8</pre>
+        <p>應進入容器內 shell（提示字可能類似 <span class="code">/ #</span>）。離開表示結束該次容器行程：<span class="code">exit</span>。</p>
+
+        <div class="lab-h">6 — 在容器內驗證隔離（與教材截圖對應）</div>
+        <pre>hostname
+ip a s
+ps aux
+ls -al /bin | head -n 8</pre>
+        <p>預期：<span class="code">hostname</span> 為 <span class="code">dagger</span>；網路命名空間隔離時通常只見 <span class="code">lo</span>；<span class="code">ps</span> 中 <span class="code">sh</span> 為 PID 1；用 BusyBox/Alpine 時 <span class="code">/bin</span> 底下常見指向 busybox 的 symlink。</p>
+
+        <div class="lab-h">7 — rootfs 會被寫入；虛擬檔案受核心保護</div>
+        <p>在容器內仍是 root，變更會寫回<strong>宿主機上的同一份</strong> <span class="code">rootfs/</span>，因此不適合再給「另一個乾淨容器」共用同一路徑而不重建。<span class="code">/proc</span> 下為核心介面，刪除會失敗。</p>
+        <pre>whoami
+mkdir /zzz
+rm /bin/zcat
+cat /proc/meminfo | head -n 3
+rm /proc/meminfo</pre>
+        <p>預期：<span class="code">rm /proc/meminfo</span> 出現 <span class="code">Permission denied</span>（或類似錯誤）。離開：<span class="code">exit</span>。</p>
+
+        <div class="lab-h">8 — 進階：拆步生命週期（可選，對照本頁 §07）</div>
+        <pre>cd ~/oci-bb8
+sudo runc create myct
+sudo runc state myct
+sudo runc start myct
+sudo runc kill myct KILL
+sudo runc delete myct</pre>
+      </div>
+    </div>
+
+    <div class="lab-wrap mt3">
+      <div class="lab-steps">
+        <div class="lab-steps-title">// 點選步驟（或按播放）— 對照上方完整指令</div>
+        <div class="lab-step" data-labstep="0">
+          <div class="lab-dot">0</div>
+          <div class="lab-meta">
+            <div class="lab-name">Ubuntu 依賴</div>
+            <div class="lab-sub">runc / curl / jq / nano …</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="1">
+          <div class="lab-dot">1</div>
+          <div class="lab-meta">
+            <div class="lab-name">建立 bundle</div>
+            <div class="lab-sub">~/oci-bb8 + rootfs/</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="2">
+          <div class="lab-dot">2</div>
+          <div class="lab-meta">
+            <div class="lab-name">填入 rootfs</div>
+            <div class="lab-sub">Docker BusyBox 或 Alpine tgz</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="3">
+          <div class="lab-dot">3</div>
+          <div class="lab-meta">
+            <div class="lab-name">chown root</div>
+            <div class="lab-sub">與 runc 權限要求一致</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="4">
+          <div class="lab-dot">4</div>
+          <div class="lab-meta">
+            <div class="lab-name">runc spec + 編修</div>
+            <div class="lab-sub">hostname dagger、args sh</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="5">
+          <div class="lab-dot">5</div>
+          <div class="lab-meta">
+            <div class="lab-name">runc run bb8</div>
+            <div class="lab-sub">進互動 shell</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="6">
+          <div class="lab-dot">6</div>
+          <div class="lab-meta">
+            <div class="lab-name">驗證隔離</div>
+            <div class="lab-sub">hostname / ip / ps / ls /bin</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="7">
+          <div class="lab-dot">7</div>
+          <div class="lab-meta">
+            <div class="lab-name">rootfs 變更 + /proc</div>
+            <div class="lab-sub">寫入層與核心保護</div>
+          </div>
+        </div>
+        <div class="lab-step" data-labstep="8">
+          <div class="lab-dot">8</div>
+          <div class="lab-meta">
+            <div class="lab-name">Lifecycle（可選）</div>
+            <div class="lab-sub">create / start / kill / delete</div>
+          </div>
+        </div>
+
+        <div class="lab-actions">
+          <button class="btn btn-primary btn-sm" onclick="labPlay()">▶ 播放整個 lab</button>
+          <button class="btn btn-ghost btn-sm" onclick="labReset()">↺ 重置</button>
+          <button class="btn btn-ghost btn-sm" onclick="labNext()">⏭ 下一步</button>
+        </div>
+      </div>
+
+      <div class="term" aria-label="terminal simulation">
+        <div class="term-head">
+          <div class="term-title">// 終端機模擬（對照你實際輸出）</div>
+          <div class="term-dots"><div class="td"></div><div class="td"></div><div class="td"></div></div>
+        </div>
+        <div class="term-body" id="lab-term"></div>
+        <div class="fsbox">
+          <div class="term-title" style="margin-bottom:0.5rem">// bundle 目錄（簡化）</div>
+          <div class="tree" id="lab-tree"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer style="background:var(--bg3);border-top:1px solid var(--border);padding:2rem;text-align:center;font-family:var(--font-mono);font-size:0.72rem;color:var(--muted)">
+  OCI Runtime Spec 互動教學 · 基於 opencontainers/runtime-spec · <span style="color:var(--green)">github.com/opencontainers</span>
+</footer>
+
+<script>
+/* ════════════════════════════════
+   §1 OVERVIEW — animate nodes
+   ════════════════════════════════ */
+(function(){
+  const obs = new IntersectionObserver(entries=>{
+    entries.forEach(e=>{
+      if(e.isIntersecting){
+        ['sn1','sa1','sn2','sa2','sn3'].forEach((id,i)=>{
+          setTimeout(()=>{
+            const el=document.getElementById(id);
+            if(el){el.classList.add('visible');}
+          },i*220);
+        });
+        obs.disconnect();
+      }
+    });
+  },{threshold:0.3});
+  const target=document.getElementById('spec-chain');
+  if(target)obs.observe(target);
+})();
+
+/* ════════════════════════════════
+   §2 BUNDLE
+   ════════════════════════════════ */
+let bundleAnimated=false;
+function animateBundle(){
+  if(bundleAnimated){resetBundle();setTimeout(animateBundle,400);return;}
+  bundleAnimated=true;
+  const items=['bi1','bi2','bi3','bi4'];
+  items.forEach((id,i)=>{
+    setTimeout(()=>{
+      document.getElementById(id).classList.add('in');
+    },i*200);
+  });
+  setTimeout(()=>{document.getElementById('bundle-arrow').style.opacity='1';},900);
+  setTimeout(()=>{
+    const bfiles=['bf1','bf2'];
+    bfiles.forEach((id,i)=>{
+      setTimeout(()=>{document.getElementById(id).classList.add('appear');},i*300);
+    });
+  },1100);
+  setTimeout(()=>{document.getElementById('bundle-box').classList.add('sealed');},1700);
+}
+function resetBundle(){
+  bundleAnimated=false;
+  ['bi1','bi2','bi3','bi4'].forEach(id=>document.getElementById(id).classList.remove('in'));
+  ['bf1','bf2'].forEach(id=>document.getElementById(id).classList.remove('appear'));
+  document.getElementById('bundle-arrow').style.opacity='0';
+  document.getElementById('bundle-box').classList.remove('sealed');
+}
+
+/* ════════════════════════════════
+   §3 CONFIG.JSON
+   ════════════════════════════════ */
+const configData={
+  ociVersion:{title:'ociVersion',desc:'指定本 config.json 遵循的 OCI Runtime Spec 版本號。Runtime 會先驗證版本相容性再繼續。',ex:'"ociVersion": "1.1.0"'},
+  process:{title:'process',desc:'定義容器內要執行的程序：args（要跑的命令）、env（環境變數）、cwd（工作目錄）、user（UID/GID）、terminal 等。容器「啟動後秒退」最常見原因之一就是 args 指到 rootfs 裡不存在的檔。',ex:'"args": ["/bin/sh"]'},
+  root:{title:'root',desc:'指定容器的根檔案系統（rootfs）路徑，以及是否唯讀。路徑相對於 Bundle 目錄。',ex:'"root": { "path": "rootfs", "readonly": false }'},
+  mounts:{title:'mounts',desc:'定義需要掛載到容器內的檔案系統。每個項目指定 destination（容器內路徑）、source（來源）、type（proc/bind/tmpfs）與 options。像 /proc 幾乎是必需掛載，否則很多工具（ps/top）或某些 runtime 檢查會異常。',ex:'"mounts": [{ "destination": "/proc", "type": "proc", "source": "proc" }]'},
+  hostname:{title:'hostname',desc:'設定容器內的主機名稱（需要 UTS namespace）。容器內執行 hostname 命令會看到此值，而不是主機的真實 hostname。',ex:'"hostname": "my-container-01"'},
+  linux:{title:'linux (Linux 平台擴展)',desc:'Linux 平台專屬配置，包含 namespaces（隔離）、resources（cgroups 資源限制）、seccomp（系統呼叫過濾）、capabilities（特權控制）等關鍵安全機制。',ex:'"linux": { "namespaces": [...], "seccomp": {...} }'}
+};
+document.querySelectorAll('.json-key').forEach(el=>{
+  el.addEventListener('click',()=>{
+    document.querySelectorAll('.json-key').forEach(k=>k.classList.remove('selected'));
+    el.classList.add('selected');
+    const key=el.dataset.key;
+    const d=configData[key];
+    if(!d)return;
+    document.querySelectorAll('.cfg-btn').forEach(b=>b.classList.remove('active'));
+    const box=document.getElementById('config-detail');
+    box.innerHTML=`<h4>${d.title}</h4><p>${d.desc}</p><div class="ex">${d.ex}</div>`;
+  });
+});
+
+const cfgTopics={
+  'process-args':{
+    title:'process.args（容器的主程序）',
+    desc:'容器不是 VM，它最終只是在跑一個「主程序」。runtime 會在設定好的隔離環境裡 exec 這個 args。若 rootfs 沒有對應的執行檔（例如沒有 /bin/sh），容器會立刻退出。',
+    ex:'"process": { "args": ["/bin/sh"] }',
+    highlightKey:'process'
+  },
+  'process-user':{
+    title:'process.user（用誰的身份跑）',
+    desc:'用 UID/GID 指定容器內程序的身份。即使在容器內看起來像 root（UID 0），搭配 user namespace 可以映射到宿主機的非特權使用者，安全性更好。',
+    ex:'"process": { "user": { "uid": 0, "gid": 0 } }',
+    highlightKey:'process'
+  },
+  'mounts-proc':{
+    title:'mounts（為什麼一定要掛 /proc）',
+    desc:'/proc 是許多工具與 library 依賴的「程序/系統資訊介面」。缺少它常見現象是 ps/top 出錯、某些檢查取不到 PID/namespace 資訊。',
+    ex:'{ "destination": "/proc", "type": "proc", "source": "proc" }',
+    highlightKey:'mounts'
+  },
+  'linux-ns':{
+    title:'linux.namespaces（隔離視圖）',
+    desc:'namespaces 決定容器會「看見」哪些獨立視圖：PID、NET、MNT、UTS、IPC、USER… 這是容器像「獨立系統」的關鍵。',
+    ex:'"namespaces": [{ "type": "pid" }, { "type": "network" }, { "type": "mount" }]',
+    highlightKey:'linux'
+  },
+  'linux-cgroups':{
+    title:'linux.resources（cgroups：資源配額）',
+    desc:'用 cgroups 限制 CPU/Memory/I/O 等資源，避免單一容器吃光主機。你在 §05 的水桶模型就是在講這件事。',
+    ex:'"resources": { "memory": { "limit": 536870912 }, "cpu": { "quota": 50000, "period": 100000 } }',
+    highlightKey:'linux'
+  },
+  'linux-seccomp':{
+    title:'linux.seccomp（系統呼叫過濾）',
+    desc:'在容器程序與 kernel 之間設一道 syscall 白名單/黑名單。defaultAction 通常是拒絕，其餘再逐步允許必要 syscalls。',
+    ex:'"seccomp": { "defaultAction": "SCMP_ACT_ERRNO", "syscalls": [{ "names": ["read","write","open"], "action": "SCMP_ACT_ALLOW" }] }',
+    highlightKey:'linux'
+  }
+};
+
+function showCfgTopic(id){
+  const d=cfgTopics[id];
+  if(!d)return;
+  document.querySelectorAll('.cfg-btn').forEach(b=>b.classList.toggle('active',b.dataset.cfg===id));
+  if(d.highlightKey){
+    const keyEl=document.querySelector(`.json-key[data-key="${d.highlightKey}"]`);
+    if(keyEl){ keyEl.click(); }
+  }
+  const box=document.getElementById('config-detail');
+  box.innerHTML=`<h4>${d.title}</h4><p>${d.desc}</p><div class="ex">${d.ex}</div>`;
+  const panel=document.getElementById('json-panel');
+  if(panel){ panel.scrollTop=0; }
+}
+
+document.querySelectorAll('.cfg-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>showCfgTopic(btn.dataset.cfg));
+});
+showCfgTopic('process-args');
+
+/* ════════════════════════════════
+   §0.75 THEORY — interactive concepts
+   ════════════════════════════════ */
+const theoryData={
+  bundle:{
+    title:'Bundle（rootfs + config.json）',
+    desc:'Runtime Spec 的核心輸入。上層工具把 image 展開成 rootfs，並生成 config.json；runtime 只需要拿到 bundle，就能建立隔離、掛載與限制，最後啟動程序。',
+    runc:[
+      '$ mkdir -p bundle/rootfs',
+      '$ (準備 rootfs)',
+      '$ cd bundle && runc spec'
+    ],
+    why:'把「檔案系統 + 規則」打包成 runtime 的一致輸入，讓 runtime 可替換。'
+  },
+  state:{
+    title:'State（可觀測狀態）',
+    desc:'runtime 必須能回報容器的狀態（status/pid/bundle 等）。這讓上層工具能在不同 runtime 間用同一套方式監控與協調。',
+    runc:[
+      '$ runc state myct',
+      '$ runc list'
+    ],
+    why:'沒有 state，上層就只能「猜」容器在不在、PID 是多少，工具鏈會變脆弱。'
+  },
+  lifecycle:{
+    title:'Lifecycle（create/start/kill/delete）',
+    desc:'Spec 把容器建模成狀態機。操作是「標準 API」，狀態是「標準回報」。這就是為什麼你可以把 runc 換成 crun，containerd 仍能工作。',
+    runc:[
+      '$ sudo runc create myct',
+      '$ sudo runc start myct',
+      '$ sudo runc kill myct TERM',
+      '$ sudo runc delete myct'
+    ],
+    why:'把「如何啟動/停止」標準化，避免上層綁死某個 runtime 的私有行為。'
+  },
+  process:{
+    title:'process（要跑什麼程序）',
+    desc:'決定容器裡的「主程序」：args/env/cwd/user/terminal 等。很多「容器一啟動就退出」其實是 process.args 指到不存在的執行檔。',
+    runc:[
+      '"process": { "args": ["/bin/sh"] }',
+      '確認 rootfs 內有 /bin/sh'
+    ],
+    why:'容器本質上是「一個被隔離的程序」；process 就是這個程序的定義。'
+  },
+  mounts:{
+    title:'mounts（把必要的檔案系統掛進去）',
+    desc:'例如 /proc 對很多工具與程式是必要的。mounts 決定容器內看到哪些虛擬檔案系統或 bind mounts。',
+    runc:[
+      '"mounts": [{ "destination": "/proc", "type": "proc", "source": "proc" }]',
+      '缺 /proc 常見症狀：ps/top/某些 runtime 檢查失敗'
+    ],
+    why:'沒有 mounts，就算有 rootfs，很多「系統視角」仍不完整。'
+  },
+  namespaces:{
+    title:'namespaces（隔離：讓它以為自己獨佔系統）',
+    desc:'PID/NET/MNT/IPC/UTS/USER… 決定你隔離哪些資源視圖。這是「容器看起來像獨立機器」的關鍵來源之一。',
+    runc:[
+      '"linux": { "namespaces": [{ "type": "pid" }, { "type": "network" }, ...] }',
+      '對應本頁 §04 的互動示意'
+    ],
+    why:'隔離視圖，降低互相干擾，也降低安全風險。'
+  },
+  cgroups:{
+    title:'cgroups（限制：CPU/Memory/I/O）',
+    desc:'限制容器可用資源，避免單一 workload 吃光主機。這是「多租戶/多工作負載」的基本保護。',
+    runc:[
+      '"resources": { "memory": { "limit": ... }, "cpu": { "quota": ... } }',
+      '對應本頁 §05 水桶模型'
+    ],
+    why:'把「可用資源」變成可控的配額，而不是看運氣。'
+  },
+  seccomp:{
+    title:'seccomp（系統呼叫過濾）',
+    desc:'在程序與 kernel 之間設一道過濾牆，只允許必要 syscall。這能大幅縮小攻擊面。',
+    runc:[
+      '"seccomp": { "defaultAction": "SCMP_ACT_ERRNO", "syscalls": [...] }',
+      '對應本頁 §06 的 allow/deny 動畫'
+    ],
+    why:'安全不是只有隔離，還要減少「就算突破了也能做的事」。'
+  },
+  hooks:{
+    title:'hooks（生命週期插入點）',
+    desc:'允許你在 create/start/stop 等階段插入自訂程式，做網路設定、日誌、清理等工作。Hook 是「可擴充性」的接口。',
+    runc:[
+      '"hooks": { "prestart": [...], "poststart": [...], "poststop": [...] }',
+      '對應本頁 §08 時序播放器'
+    ],
+    why:'讓 runtime 的標準流程可插入自訂動作，而不用改 runtime 本身。'
+  }
+};
+
+function renderTheory(key){
+  const box=document.getElementById('theory-detail');
+  const d=theoryData[key];
+  if(!box||!d)return;
+  document.querySelectorAll('.theory-btn').forEach(b=>b.classList.toggle('active',b.dataset.theory===key));
+  const runcLines=(d.runc||[]).map(l=>`<div><span style="color:var(--muted)">$</span> ${escapeHtml(l).replace(/^"|"$/g,'')}</div>`).join('');
+  box.innerHTML=`<h4>${d.title}</h4><p>${d.desc}</p><div class="mini"><div style="color:var(--muted);margin-bottom:0.35rem">// 對應到 runc / config.json</div>${runcLines}</div><p style="margin-top:0.75rem"><strong style="color:var(--text)">為什麼重要：</strong> ${d.why}</p>`;
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g,m=>({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[m]));
+}
+
+document.querySelectorAll('.theory-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>renderTheory(btn.dataset.theory));
+});
+renderTheory('bundle');
+
+/* ════════════════════════════════
+   §0.5 WHY — compare toggle
+   ════════════════════════════════ */
+let cmpMode='nospec';
+let cmpRuntime='runc';
+
+function setCmpMode(mode){
+  cmpMode=mode;
+  document.querySelectorAll('.cmp-btn').forEach(b=>b.classList.toggle('active',b.dataset.cmp===mode));
+  const cfg=document.getElementById('cmp-config');
+  const contract=document.getElementById('cmp-contract');
+  const hint=document.getElementById('cmp-hint');
+  const note=document.getElementById('cmp-note');
+  if(!cfg||!contract||!hint||!note) return;
+
+  if(mode==='spec'){
+    cfg.innerHTML=
+`[plugins."io.containerd.grpc.v1.cri"]<br>
+&nbsp;&nbsp;runtime_type = "io.containerd.runc.v2"<br>
+&nbsp;&nbsp;options = { <span style="color:var(--green)">"Spec": "OCI bundle"</span> }`;
+    contract.innerHTML=
+`containerd → <span style="color:var(--green)">OCI bundle contract</span> → ${cmpRuntime}<br>
+<span style="color:var(--muted)">切換 runtime 時，上層流程不變</span>`;
+    hint.textContent='提示：有 spec 時，containerd 維持同一套 contract，換 runtime 只改 runtime 名稱。';
+    note.innerHTML=`<strong style="color:var(--text)">可替換性成立：</strong>runtime 可換，但 containerd 的配置邏輯不必重寫。`;
+  }else{
+    cfg.innerHTML=
+`[plugins."io.containerd.grpc.v1.cri".containerd.runtimes.${cmpRuntime}]<br>
+&nbsp;&nbsp;runtime_type = "${cmpRuntime}.v2"<br>
+&nbsp;&nbsp;options = { <span style="color:var(--orange)">vendor-specific fields ...</span> }`;
+    contract.innerHTML=
+`containerd → <span style="color:var(--orange)">runtime-specific config</span> → ${cmpRuntime}<br>
+<span style="color:var(--muted)">每換一次 runtime，上層設定都要調整</span>`;
+    hint.textContent='提示：沒有 spec 時，runtime 是「私有協議」，containerd 需為每個 runtime 客製。';
+    note.innerHTML=`<strong style="color:var(--text)">會被綁死：</strong>切換 ${cmpRuntime} 之外的 runtime，containerd 的配置與行為映射要重寫。`;
+  }
+}
+
+function cmpSwapRuntime(rt){
+  cmpRuntime=rt;
+  setCmpMode(cmpMode);
+}
+
+document.querySelectorAll('.cmp-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>setCmpMode(btn.dataset.cmp));
+});
+setCmpMode('nospec');
+cmpSwapRuntime('runc');
+
+/* ════════════════════════════════
+   §10 RUNC LAB — stepper + terminal
+   ════════════════════════════════ */
+let labStep=-1;
+let labPlaying=false;
+let labTimer=null;
+
+function setLabActive(step){
+  labStep=step;
+  document.querySelectorAll('.lab-step').forEach(el=>{
+    el.classList.toggle('active',parseInt(el.dataset.labstep,10)===step);
+  });
+}
+
+function labClear(){
+  const term=document.getElementById('lab-term');
+  if(term) term.innerHTML='';
+}
+
+function labPrint(lines, delay=120){
+  const term=document.getElementById('lab-term');
+  if(!term) return;
+  const arr=Array.isArray(lines)?lines:[String(lines)];
+  let i=0;
+  function addOne(){
+    if(i>=arr.length) return;
+    const div=document.createElement('div');
+    div.className='term-line';
+    div.innerHTML=arr[i];
+    term.appendChild(div);
+    requestAnimationFrame(()=>div.classList.add('show'));
+    term.scrollTop=term.scrollHeight;
+    i++;
+    if(i<arr.length){
+      labTimer=setTimeout(addOne,delay);
+    }
+  }
+  addOne();
+}
+
+function labSetTree(step){
+  const tree=document.getElementById('lab-tree');
+  if(!tree) return;
+  const s=Math.max(0,Math.min(step,8));
+  if(s===0){
+    tree.innerHTML=`<div><span class="m">~/oci-bb8/</span><br><span class="m">(尚未建立：先安裝 runc / curl / jq …)</span></div>`;
+    return;
+  }
+  let html=`<div><span class="m">~/oci-bb8/</span><br>├─ <span class="g">rootfs/</span>`;
+  if(s>=2){
+    html+=`<br>│&nbsp;&nbsp;└─ <span class="g">bin/sh</span> <span class="m">+ busybox symlinks</span>`;
+  }else{
+    html+=`<br>│&nbsp;&nbsp;<span class="m">(空目錄，等待 tar / export)</span>`;
+  }
+  html+=`<br>`;
+  if(s>=4){
+    html+=`└─ <span class="g">config.json</span> <span class="m">· hostname dagger · terminal true</span>`;
+  }else{
+    html+=`└─ <span class="m">config.json 尚未生成</span>`;
+  }
+  if(s>=3 && s<4) html+=`<br><span class="m">// 已 sudo chown -R root:root ~/oci-bb8</span>`;
+  if(s>=5 && s<8) html+=`<br><span class="m">// sudo runc run bb8 → 新 UTS / NET / PID …</span>`;
+  if(s>=8) html+=`<br><span class="m">// 可選：runc create → start → kill → delete</span>`;
+  html+=`</div>`;
+  tree.innerHTML=html;
+}
+
+function labShow(step){
+  clearTimeout(labTimer);
+  labPlaying=false;
+  const playBtn=document.querySelector('#runc-lab .btn.btn-primary');
+  if(playBtn) playBtn.textContent='▶ 播放整個 lab';
+  setLabActive(step);
+  labSetTree(step);
+  labClear();
+
+  if(step===0){
+    labPrint([
+      `<span class="dim"># step 0：Ubuntu 依賴</span>`,
+      `<span class="prompt">$</span> sudo apt update && sudo apt install -y runc curl jq nano ca-certificates iproute2`,
+      `<span class="ok">… Setting up runc …</span>`,
+      `<span class="prompt">$</span> runc --version`,
+      `<span class="ok">runc version 1.x.x</span> <span class="dim">(依套件庫)</span>`,
+      `<span class="dim"># 若走 BusyBox rootfs，另裝： sudo apt install -y docker.io</span>`
+    ],130);
+  }else if(step===1){
+    labPrint([
+      `<span class="dim"># step 1：建立 bundle</span>`,
+      `<span class="prompt">$</span> mkdir -p ~/oci-bb8/rootfs && cd ~/oci-bb8`,
+      `<span class="prompt">$</span> pwd`,
+      `<span class="ok">/home/ubuntu/oci-bb8</span> <span class="dim">(示意)</span>`,
+      `<span class="dim"># 此時僅有 rootfs/，尚無 config.json</span>`
+    ],130);
+  }else if(step===2){
+    labPrint([
+      `<span class="dim"># step 2：填入 rootfs（BusyBox 示例，與教材 /bin→busybox 一致）</span>`,
+      `<span class="prompt">$</span> sudo docker create --name bb-export busybox:latest sh`,
+      `<span class="prompt">$</span> sudo docker export bb-export | sudo tar -C rootfs -xf -`,
+      `<span class="prompt">$</span> sudo docker rm bb-export`,
+      `<span class="prompt">$</span> test -x rootfs/bin/sh && echo OK`,
+      `<span class="ok">OK</span>`,
+      `<span class="dim"># 免 Docker 可改：curl alpine-minirootfs.tar.gz | sudo tar -C rootfs -xz</span>`
+    ],125);
+  }else if(step===3){
+    labPrint([
+      `<span class="dim"># step 3：擁有者改為 root（runc 常要求；避免 rootfs 屬於一般使用者）</span>`,
+      `<span class="prompt">$</span> sudo chown -R root:root ~/oci-bb8`,
+      `<span class="dim"># 完成後整個 bundle 適合 sudo runc …</span>`
+    ],130);
+  }else if(step===4){
+    labPrint([
+      `<span class="dim"># step 4：runc spec + 編修 config.json</span>`,
+      `<span class="prompt">$</span> cd ~/oci-bb8 && sudo runc spec`,
+      `<span class="dim"># 手動 nano，或 jq：hostname dagger、terminal true、args [&quot;sh&quot;]、root.path rootfs</span>`,
+      `<span class="prompt">$</span> sudo jq -r '.hostname, .process.args[0], .root.path' config.json`,
+      `<span class="ok">dagger</span>`,
+      `<span class="ok">sh</span>`,
+      `<span class="ok">rootfs</span>`
+    ],125);
+  }else if(step===5){
+    labPrint([
+      `<span class="dim"># step 5：互動啟動（容器名 bb8）</span>`,
+      `<span class="prompt">$</span> cd ~/oci-bb8 && sudo runc run bb8`,
+      `<span class="dim"># 進入容器 root shell，提示字可能為：</span>`,
+      `<span class="prompt">/ #</span> <span class="dim">_</span>`
+    ],140);
+  }else if(step===6){
+    labPrint([
+      `<span class="dim"># step 6：在容器內驗證隔離</span>`,
+      `<span class="prompt">/ #</span> hostname`,
+      `<span class="ok">dagger</span>`,
+      `<span class="prompt">/ #</span> ip a s`,
+      `<span class="ok">1: lo: &lt;LOOPBACK,UP,LOWER_UP&gt; …</span>`,
+      `<span class="ok">&nbsp;&nbsp;&nbsp;inet 127.0.0.1/8 scope host lo</span>`,
+      `<span class="dim"># 僅 lo：獨立 network namespace</span>`,
+      `<span class="prompt">/ #</span> ps aux`,
+      `<span class="ok">PID USER … COMMAND</span>`,
+      `<span class="ok">&nbsp;&nbsp;1 root … sh</span>`,
+      `<span class="prompt">/ #</span> ls -al /bin | head -n 5`,
+      `<span class="ok">arch -> /bin/busybox</span> <span class="dim">(BusyBox 時)</span>`
+    ],115);
+  }else if(step===7){
+    labPrint([
+      `<span class="dim"># step 7：改動寫回宿主機 rootfs/；/proc 受保護</span>`,
+      `<span class="prompt">/ #</span> whoami`,
+      `<span class="ok">root</span>`,
+      `<span class="prompt">/ #</span> mkdir /zzz`,
+      `<span class="prompt">/ #</span> rm /bin/zcat`,
+      `<span class="prompt">/ #</span> cat /proc/meminfo | head -n 3`,
+      `<span class="ok">MemTotal:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;… kB</span>`,
+      `<span class="prompt">/ #</span> rm /proc/meminfo`,
+      `<span class="errTxt">rm: can't remove '/proc/meminfo': Permission denied</span>`,
+      `<span class="dim"># 離開：exit</span>`
+    ],120);
+  }else if(step===8){
+    labPrint([
+      `<span class="dim"># step 8（可選）：拆步 lifecycle（別名可自訂，勿與 bb8 衝突）</span>`,
+      `<span class="prompt">$</span> cd ~/oci-bb8`,
+      `<span class="prompt">$</span> sudo runc create myct`,
+      `<span class="prompt">$</span> sudo runc state myct`,
+      `<span class="ok">{ &quot;status&quot;: &quot;created&quot;, … }</span>`,
+      `<span class="prompt">$</span> sudo runc start myct`,
+      `<span class="prompt">$</span> sudo runc kill myct KILL`,
+      `<span class="prompt">$</span> sudo runc delete myct`,
+      `<span class="ok">done</span>`
+    ],125);
+  }
+}
+
+function labReset(){
+  clearTimeout(labTimer);
+  labPlaying=false;
+  labShow(0);
+}
+
+function labNext(){
+  const next=Math.min(8, Math.max(0,labStep)+1);
+  labShow(next);
+}
+
+function labPlay(){
+  if(labPlaying){
+    clearTimeout(labTimer);
+    labPlaying=false;
+    const playBtn=document.querySelector('#runc-lab .btn.btn-primary');
+    if(playBtn) playBtn.textContent='▶ 播放整個 lab';
+    return;
+  }
+  labPlaying=true;
+  const playBtn=document.querySelector('#runc-lab .btn.btn-primary');
+  if(playBtn) playBtn.textContent='⏸ 暫停';
+  let s=0;
+  function run(){
+    if(!labPlaying) return;
+    labShow(s);
+    s++;
+    if(s<=8){
+      labTimer=setTimeout(run,2600);
+    }else{
+      labPlaying=false;
+      if(playBtn) playBtn.textContent='▶ 播放整個 lab';
+    }
+  }
+  run();
+}
+
+document.querySelectorAll('.lab-step').forEach(el=>{
+  el.addEventListener('click',()=>labShow(parseInt(el.dataset.labstep,10)));
+});
+labShow(0);
+
+/* ════════════════════════════════
+   §4 NAMESPACES
+   ════════════════════════════════ */
+const nsData={
+  pid:{label:'PID Namespace',color:'#00d4aa',desc:'隔離程序 ID 空間。容器內第一個程序 PID=1，看不到宿主機的其他程序。',json:'{ "type": "pid" }',badge:'PID 1'},
+  net:{label:'NET Namespace',color:'#60a5fa',desc:'隔離網路堆疊，包含獨立的 IP 位址、路由表、iptables。每個容器有自己的 eth0 虛擬網卡。',json:'{ "type": "network" }',badge:'eth0'},
+  mnt:{label:'MNT Namespace',color:'#a78bfa',desc:'隔離掛載點視圖。容器有自己的 / 根目錄，看不到主機的其他掛載點。',json:'{ "type": "mount" }',badge:'/proc'},
+  ipc:{label:'IPC Namespace',color:'#fbbf24',desc:'隔離 IPC（Inter-Process Communication）資源，包含 System V IPC 和 POSIX message queues。',json:'{ "type": "ipc" }',badge:'IPC'},
+  uts:{label:'UTS Namespace',color:'#f97316',desc:'隔離主機名稱（hostname）和網域名稱（domainname）。容器可以有自己的 hostname。',json:'{ "type": "uts" }',badge:'hostname'},
+  user:{label:'USER Namespace',color:'#ef4444',desc:'隔離使用者 ID 和群組 ID。容器內的 root（UID 0）可以對應到主機的非特權使用者，增強安全性。',json:'{ "type": "user" }',badge:'UID 0→1000'},
+  cgroup:{label:'CGROUP Namespace',color:'#34d399',desc:'隔離 cgroup 視圖。容器程序只能看到自己的 cgroup 層次，無法感知主機的 cgroup 結構。',json:'{ "type": "cgroup" }',badge:'cgroup'},
+  time:{label:'TIME Namespace',color:'#818cf8',desc:'隔離系統時鐘。允許容器有不同的 CLOCK_MONOTONIC 和 CLOCK_BOOTTIME，適用於時間敏感的遷移場景。',json:'{ "type": "time" }',badge:'clock'}
+};
+function selectNs(type){
+  const d=nsData[type];
+  if(!d)return;
+  document.getElementById('ns-info-box').innerHTML=`<strong style="color:${d.color}">${d.label}</strong><br><span style="font-size:0.78rem">${d.desc}</span>`;
+  document.querySelectorAll('#ns-host-items .ns-item').forEach(el=>{
+    el.classList.remove('faded');
+    if(el.dataset.type===type){el.classList.add('faded');}
+  });
+  document.querySelectorAll('#ns-cont-items .ns-item').forEach(el=>{
+    el.classList.remove('focus');
+    if(el.dataset.type===type){el.classList.add('focus');}
+  });
+  document.getElementById('ns-json').innerHTML=`<span style="color:var(--muted)">"linux": {</span><br>&nbsp;&nbsp;<span style="color:var(--muted)">"namespaces": [{</span><br>&nbsp;&nbsp;&nbsp;&nbsp;<span style="color:var(--blue)">"type"</span>: <span style="color:${d.color}">"${type}"</span><br>&nbsp;&nbsp;}]<br><span style="color:var(--muted)">}</span>`;
+  document.querySelectorAll('.ns-grid .syscall-btn').forEach(b=>{
+    b.style.borderColor='';b.style.color='';
+  });
+  const buttons=[...document.querySelectorAll('.ns-grid .syscall-btn')];
+  const types=['pid','net','mnt','ipc','uts','user','cgroup','time'];
+  const idx=types.indexOf(type);
+  if(buttons[idx]){buttons[idx].style.borderColor=d.color;buttons[idx].style.color=d.color;}
+}
+selectNs('pid');
+
+/* ════════════════════════════════
+   §5 CGROUPS
+   ════════════════════════════════ */
+function updateBucket(type,val){
+  val=parseInt(val);
+  const fill=document.getElementById('bf-'+type);
+  const pct=document.getElementById('bp-'+type);
+  const wrap=document.getElementById('bw-'+type);
+  fill.style.height=Math.min(val,100)+'%';
+  pct.textContent=val+'%';
+  wrap.classList.remove('warn','danger');
+  if(val>=100){wrap.classList.add('danger');}
+  else if(val>=80){wrap.classList.add('warn');}
+  // update JSON
+  if(type==='mem'){
+    document.getElementById('cj-mem').textContent=Math.round(val*0.01*536870912);
+  }else if(type==='cpu'){
+    document.getElementById('cj-cpu').textContent=Math.round(val*0.01*50000);
+  }else if(type==='io'){
+    document.getElementById('cj-io').textContent=Math.round(val*0.01*500+10);
+  }
+}
+
+/* ════════════════════════════════
+   §6 SECCOMP
+   ════════════════════════════════ */
+let secBusy=false;
+function fireSyscall(name,mode){
+  if(secBusy)return;
+  secBusy=true;
+  const stage=document.getElementById('seccomp-stage');
+  const stageRect=stage.getBoundingClientRect();
+  const p=document.getElementById('packet-el');
+  const p2=document.getElementById('packet2-el');
+  const ex=document.getElementById('explode-el');
+  p.className='packet '+(mode==='allow'?'allow':'deny');
+  p.textContent=name+'()';
+  p.style.cssText=`display:flex;left:72px;top:50%;transform:translateY(-50%);transition:none`;
+  p2.style.display='none';
+  ex.style.opacity='0';
+  void p.offsetWidth;
+  if(mode==='allow'){
+    p.style.transition='left 0.45s cubic-bezier(0.4,0,0.2,1)';
+    p.style.left='calc(50% - 60px)';
+    setTimeout(()=>{
+      p.style.transition='left 0.45s cubic-bezier(0.4,0,0.2,1), opacity 0.2s';
+      p.style.left='calc(50% + 20px)';
+      p2.className='packet allow';
+      p2.textContent=name+'()';
+      p2.style.cssText='display:flex;right:72px;top:50%;transform:translateY(-50%);left:auto';
+      void p2.offsetWidth;
+      p2.style.transition='right 0.4s cubic-bezier(0.4,0,0.2,1)';
+      p2.style.right='72px';
+      setTimeout(()=>{p.style.display='none';p2.style.display='none';secBusy=false;},500);
+    },500);
+    addLog(name+'()', true);
+  }else{
+    p.style.transition='left 0.45s cubic-bezier(0.4,0,0.2,1)';
+    p.style.left='calc(50% - 80px)';
+    setTimeout(()=>{
+      ex.style.left=p.style.left;
+      ex.style.top='50%';
+      ex.style.transform='translateY(-50%)';
+      ex.style.opacity='1';
+      ex.style.transition='opacity 0.5s 0.3s';
+      p.style.display='none';
+      setTimeout(()=>{ex.style.opacity='0';secBusy=false;},900);
+    },500);
+    addLog(name+'()', false);
+  }
+}
+function addLog(name, allowed){
+  const log=document.getElementById('sec-log');
+  const entry=document.createElement('div');
+  entry.className='log-entry';
+  const ts=new Date().toLocaleTimeString('zh-TW',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  entry.innerHTML=`<span style="color:var(--muted)">[${ts}]</span> ${name} → <span style="color:${allowed?'var(--green)':'var(--red)'}">${allowed?'ALLOW':'DENY (EPERM)'}</span>`;
+  log.appendChild(entry);
+  requestAnimationFrame(()=>entry.classList.add('show'));
+  log.scrollTop=log.scrollHeight;
+}
+
+/* ════════════════════════════════
+   §7 LIFECYCLE
+   ════════════════════════════════ */
+let lcState='initial';
+const lcStates=['initial','creating','created','running','stopped'];
+const lcDescs={
+  initial:'<strong>初始狀態</strong> — 點擊 <code style="font-family:var(--font-mono);background:var(--bg);padding:0 4px;border-radius:3px">create</code> 開始建立容器',
+  creating:'<strong>creating</strong> — Runtime 正在依照 config.json 建立隔離環境（namespace、rootfs 掛載），執行 createRuntime / createContainer hooks',
+  created:'<strong>created</strong> — 容器環境已就緒，使用者程序尚未啟動。此時可執行 startContainer hook。點擊 <code style="font-family:var(--font-mono);background:var(--bg);padding:0 4px;border-radius:3px">start</code> 啟動程序',
+  running:'<strong>running</strong> — 使用者程序正在執行中（poststart hook 已觸發）。可發送 <code style="font-family:var(--font-mono);background:var(--bg);padding:0 4px;border-radius:3px">kill</code> 信號終止程序',
+  stopped:'<strong>stopped</strong> — 程序已結束（poststop hook 已觸發）。容器資源仍佔用中，需執行 <code style="font-family:var(--font-mono);background:var(--bg);padding:0 4px;border-radius:3px">delete</code> 釋放'
+};
+const lcPids={initial:'0',creating:'–',created:'12847',running:'12847',stopped:'–'};
+function setLcState(s){
+  lcState=s;
+  const states=['creating','created','running','stopped'];
+  const idx=states.indexOf(s);
+  states.forEach((st,i)=>{
+    const dot=document.getElementById('lcd-'+st);
+    const lbl=document.getElementById('lcl-'+st);
+    dot.classList.remove('active','done','current');
+    lbl.classList.remove('active');
+    if(i<idx){dot.classList.add('done');} 
+    else if(i===idx){dot.classList.add('active','current');lbl.classList.add('active');}
+  });
+  const lines=['ll1','ll2','ll3'];
+  lines.forEach((id,i)=>document.getElementById(id).classList.toggle('active',i<idx));
+  document.getElementById('lc-desc').innerHTML=lcDescs[s]||lcDescs['initial'];
+  document.getElementById('sj-status').textContent=s==='initial'?'"–"':'"'+s+'"';
+  document.getElementById('sj-pid').textContent=lcPids[s]||'0';
+  const opCreate=document.getElementById('op-create');
+  const opStart=document.getElementById('op-start');
+  const opKill=document.getElementById('op-kill');
+  const opDelete=document.getElementById('op-delete');
+  opCreate.disabled=s!=='initial';
+  opStart.disabled=s!=='created';
+  opKill.disabled=s!=='running';
+  opDelete.disabled=s!=='stopped';
+}
+function lcOp(op){
+  if(op==='create'&&lcState==='initial'){
+    setLcState('creating');
+    setTimeout(()=>setLcState('created'),800);
+  }else if(op==='start'&&lcState==='created'){
+    setLcState('running');
+  }else if(op==='kill'&&lcState==='running'){
+    setLcState('stopped');
+  }else if(op==='delete'&&lcState==='stopped'){
+    setLcState('initial');
+    document.getElementById('lcd-creating').classList.remove('done','active','current');
+    document.getElementById('lcd-created').classList.remove('done','active','current');
+    document.getElementById('lcd-running').classList.remove('done','active','current');
+    document.getElementById('lcd-stopped').classList.remove('done','active','current');
+    ['ll1','ll2','ll3'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  }else if(op==='reset'){
+    setLcState('initial');
+    document.querySelectorAll('.lc-dot').forEach(d=>d.classList.remove('done','active','current'));
+    ['ll1','ll2','ll3'].forEach(id=>document.getElementById(id).classList.remove('active'));
+    document.getElementById('lc-desc').innerHTML=lcDescs['initial'];
+    document.getElementById('sj-status').textContent='"–"';
+    document.getElementById('sj-pid').textContent='0';
+  }
+}
+setLcState('initial');
+
+/* ════════════════════════════════
+   §8 HOOKS
+   ════════════════════════════════ */
+const hooksData=[
+  {name:'createRuntime',timing:'create 開始前',desc:'在 runtime 環境建立之前執行。此時 config.json 已解析，namespace 尚未建立。常用於網路設定的前置準備。',pct:8},
+  {name:'createContainer',timing:'namespace 建立後',desc:'namespace 已建立但使用者程序尚未啟動。可在此時對容器的 mount namespace 做進一步操作。',pct:25},
+  {name:'startContainer',timing:'start 開始前',desc:'在使用者指定的程序啟動之前執行（在容器 namespace 內）。是注入設定或初始化資源的好時機。',pct:45},
+  {name:'poststart',timing:'程序啟動後',desc:'使用者程序已啟動後執行（在主機 namespace）。常用於健康檢查等待、日誌收集啟動等。',pct:68},
+  {name:'poststop',timing:'程序終止後',desc:'容器程序結束後執行。用於清理網路資源、釋放存儲、發送通知等善後工作。',pct:88},
+];
+let hooksPlaying=false;
+let hookStep=-1;
+let hooksTimer=null;
+function buildHookMarkers(){
+  const markers=document.getElementById('hooks-markers');
+  markers.innerHTML='';
+  hooksData.forEach((h,i)=>{
+    const m=document.createElement('div');
+    m.className='hook-marker';
+    m.innerHTML=`<div class="hook-dot" id="hd-${i}"></div><div class="hook-name" id="hn-${i}">${h.name}</div>`;
+    markers.appendChild(m);
+  });
+}
+buildHookMarkers();
+function playHooks(){
+  if(hooksPlaying){
+    clearTimeout(hooksTimer);
+    hooksPlaying=false;
+    document.getElementById('hooks-play-btn').textContent='▶';
+    return;
+  }
+  hooksPlaying=true;
+  document.getElementById('hooks-play-btn').textContent='⏸';
+  hookStep=-1;
+  hooksData.forEach((_,i)=>{
+    document.getElementById('hd-'+i).classList.remove('lit','current-hook');
+    document.getElementById('hn-'+i).classList.remove('lit');
+  });
+  document.getElementById('hooks-progress').style.width='0%';
+  document.getElementById('hooks-card').innerHTML='<div style="color:var(--muted);font-size:0.82rem">容器建立中…</div>';
+  function step(){
+    hookStep++;
+    if(hookStep>=hooksData.length){
+      hooksPlaying=false;
+      document.getElementById('hooks-play-btn').textContent='▶';
+      document.getElementById('hooks-card').innerHTML=`<h4>✅ 全部 Hook 執行完畢</h4><p style="color:var(--muted);font-size:0.8rem">容器生命週期中的所有 Hook 已依序觸發。</p>`;
+      return;
+    }
+    const h=hooksData[hookStep];
+    document.getElementById('hooks-progress').style.width=h.pct+'%';
+    if(hookStep>0){
+      document.getElementById('hd-'+(hookStep-1)).classList.remove('current-hook');
+    }
+    document.getElementById('hd-'+hookStep).classList.add('lit','current-hook');
+    document.getElementById('hn-'+hookStep).classList.add('lit');
+    document.getElementById('hooks-card').innerHTML=`<h4>${h.name}</h4><div class="timing">⏱ ${h.timing}</div><p>${h.desc}</p>`;
+    hooksTimer=setTimeout(step,1800);
+  }
+  step();
+}
+
+/* ════════════════════════════════
+   §9 RUNTIMES
+   ════════════════════════════════ */
+const runtimesData={
+  runc:{label:'runc',color:'#00d4aa',barPct:50,time:'~180ms',lang:'Go',desc:'<strong>OCI 官方參考實作</strong>，由 Docker 貢獻。使用 libcontainer。是 containerd/CRI-O 的預設底層 Runtime。穩定、社群成熟，但 Go runtime 有啟動開銷。'},
+  crun:{label:'crun',color:'#60a5fa',barPct:82,time:'~50ms',lang:'C',desc:'<strong>以 C 語言撰寫</strong>的超輕量實作。啟動速度比 runc 快 2-3 倍，記憶體佔用更少。Podman/CRI-O 的推薦 Runtime。'},
+  youki:{label:'youki',color:'#a78bfa',barPct:78,time:'~60ms',lang:'Rust',desc:'<strong>Rust 語言實作</strong>，記憶體安全、零開銷抽象。效能接近 crun，並提供 Rust 生態的整合優勢。'},
+  gvisor:{label:'gVisor',color:'#fbbf24',barPct:22,time:'~800ms',lang:'Go',desc:'<strong>Google 開發的沙箱 Runtime</strong>。在使用者空間實作一個完整的 Linux kernel（Sentry），syscall 不直接傳到主機 kernel，提供極強的隔離性，但有較高延遲。'},
+  kata:{label:'Kata Containers',color:'#f97316',barPct:10,time:'~2000ms',lang:'VM',desc:'<strong>輕量 VM 容器</strong>，每個容器是一個獨立的 micro-VM（QEMU/Cloud Hypervisor）。最強隔離性，適合多租戶環境，啟動延遲最高。'}
+};
+function buildRaceTrack(){
+  const track=document.getElementById('race-track');
+  track.innerHTML='';
+  Object.entries(runtimesData).forEach(([key,r])=>{
+    const lane=document.createElement('div');
+    lane.className='race-lane';
+    lane.innerHTML=`<div class="lane-label">${r.label}</div><div class="lane-bar-wrap"><div class="lane-bar" id="lb-${key}" style="background:linear-gradient(90deg,${r.color}33,${r.color}66)"><span style="color:${r.color}" id="lt-${key}"></span></div></div><div class="lane-time" id="ltime-${key}" style="color:${r.color}">${r.time}</div>`;
+    track.appendChild(lane);
+  });
+}
+buildRaceTrack();
+let raceRunning=false;
+function startRace(){
+  if(raceRunning)return;
+  raceRunning=true;
+  resetRace();
+  setTimeout(()=>{
+    Object.entries(runtimesData).forEach(([key,r])=>{
+      const bar=document.getElementById('lb-'+key);
+      const lbl=document.getElementById('lt-'+key);
+      bar.style.width=r.barPct+'%';
+      bar.style.transition=`width ${(110-r.barPct)*0.02+0.4}s cubic-bezier(0.4,0,0.2,1)`;
+      setTimeout(()=>{lbl.textContent=r.time;},((110-r.barPct)*20+400));
+    });
+    setTimeout(()=>{raceRunning=false;},2500);
+  },100);
+}
+function resetRace(){
+  raceRunning=false;
+  Object.keys(runtimesData).forEach(key=>{
+    const bar=document.getElementById('lb-'+key);
+    const lbl=document.getElementById('lt-'+key);
+    if(bar){bar.style.width='0';bar.style.transition='none';}
+    if(lbl){lbl.textContent='';}
+  });
+}
+function selectRuntime(key){
+  const r=runtimesData[key];
+  if(!r)return;
+  document.querySelectorAll('.runtime-chip').forEach(c=>c.classList.remove('selected'));
+  document.querySelectorAll('.runtime-chip').forEach(c=>{if(c.textContent.trim()===key||c.textContent.trim()===r.label)c.classList.add('selected');});
+  document.getElementById('runtime-detail').innerHTML=`<strong style="color:${r.color}">${r.label}</strong> (${r.lang}) — ${r.desc}`;
+}
+
+/* ════════════════════════════════
+   Active nav link on scroll
+   ════════════════════════════════ */
+const sections=document.querySelectorAll('section[id]');
+const navLinks=document.querySelectorAll('.nav-link');
+const scrollObs=new IntersectionObserver(entries=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){
+      navLinks.forEach(l=>l.classList.remove('active'));
+      const link=document.querySelector(`.nav-link[href="#${e.target.id}"]`);
+      if(link)link.classList.add('active');
+    }
+  });
+},{threshold:0.4});
+sections.forEach(s=>scrollObs.observe(s));
+</script>
+</body>
+</html>
